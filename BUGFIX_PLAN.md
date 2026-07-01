@@ -792,6 +792,75 @@ function loadMoreExp() {
 
 ---
 
+## v3 阶段补充（2026-07-02 新一轮结构性 bug 修复）
+
+> 来源：项目结构性 bug 与隐性 bug 分析报告（新发现 12 个）
+> 范围：4 个 P0 + 8 个 P1 严重/中等 bug，每个配 vitest 单测 + git commit
+
+| v3 ID | 严重度 | 说明 | 状态 |
+|---|---|---|---|
+| **v3-P0-1** | 🔴 | trust proxy=1 绕过 → rate-limit 失效；改 `loopback` | ✅ |
+| **v3-P0-2** | 🔴 | candidate_tags 锁覆盖不全；加 `version` 列 + 乐观锁覆盖 PUT/batchAction/rename/merge/delete | ✅ |
+| **v3-P0-3** | 🔴 | scanOverdue 与启动 scan 并发；加 Promise 链 mutex + 启动 await | ✅ |
+| **v3-P0-4** | 🔴 | interviews/tasks 用 sql.js 谓词 bug；改先 SELECT 验权 + 无条件 UPDATE | ✅ |
+| **v3-P1-1** | 🟠 | reports.js SQL 字符串拼接；3 处改 `?` 占位符 | ✅ |
+| **v3-P1-2** | 🟠 | client_notes schema 缺列；加 `deleted_at`/`user_id` + 索引 + 查询过滤 + DELETE 改软删 | ✅ |
+| **v3-P1-3** | 🟠 | candidate_tags 类型不匹配 + 缺索引；移除 `String()` + 加 `idx_candidate_tags_candidate` | ✅ |
+| **v3-P1-4** | 🟠 | auditService `setImmediate` 异步丢失；改同步写入 | ✅ |
+| **v3-P1-5** | 🟠 | candidate-detail 子表分页参数未传；3 个 list 方法接 options + 前端 loadDetail 传 `{limit,offset}` | ✅ |
+| **v3-P1-6** | 🟠 | clients DELETE 不级联 client_notes；加 `UPDATE client_notes SET deleted_at=...` | ✅ |
+| **v3-P1-7** | 🟠 | api.candidates 被赋值两次（死代码）；删第一处，保留含 batchAction 的第二处 | ✅ |
+| **v3-P1-8** | 🟠 | tags.js LIKE 子串匹配；5 处改 `instr(tags, '"' + name + '"')` 精确匹配 | ✅ |
+
+**附加修复**（Phase 3 验收时发现）：
+- `init.js` 把 module-scoped `let db` 迁移到 `globalThis.__ERP_DB_STATE__`，解决 vitest 4.x worker 间模块状态不共享问题
+- `imports.js` 用 `ipKeyGenerator` 包装 IPv6 安全 keyGenerator，消除 express-rate-limit 8.x 启动警告
+- 13 处 seed 函数里的 `db.` 引用漏改 → 已补 STATE.db.
+
+**测试**：50/50 PASS（v2 阶段 12 个 + v3 阶段 38 个新增）
+- `tests/auth.test.js` 5/5
+- `tests/utils.test.js` 7/7
+- `tests/middleware/trust-proxy.test.js` 3/3（v3-P0-1）
+- `tests/routes/tags-lock.test.js` 3/3（v3-P0-2）
+- `tests/routes/recommendations-scan.test.js` 2/2（v3-P0-3）
+- `tests/routes/interviews-tasks.test.js` 3/3（v3-P0-4）
+- `tests/routes/reports-sql.test.js` 3/3（v3-P1-1）
+- `tests/routes/clients-notes.test.js` 4/4（v3-P1-2）
+- `tests/routes/candidate-tags-type.test.js` 3/3（v3-P1-3）
+- `tests/services/auditService.test.js` 3/3（v3-P1-4）
+- `tests/frontend/candidate-detail-api.test.js` 4/4（v3-P1-5）
+- `tests/frontend/api-candidates-dedup.test.js` 3/3（v3-P1-7）
+- `tests/routes/tags-instr.test.js` 4/4（v3-P1-8）
+- `tests/routes/clients-cascade.test.js` 3/3（v3-P1-6）
+
+**git log**：
+
+```
+3fe6e8e fix(init): migrate remaining db. to STATE.db. in seed functions
+c9eef21 fix(data): P1-NEW-6 cascade soft-delete client_notes
+fe1e8bb fix(data): P1-NEW-8 use instr for exact tag match in tags.js
+0bda6ca fix(perf): P1-NEW-5 wire subtable pagination params in frontend
+7c926ab refactor: P1-NEW-7 remove dead code in api.candidates
+984b738 fix(audit): P1-NEW-4 make auditService.log synchronous
+fa15c3a fix(data): P1-NEW-3 fix candidate_tags type + add missing index
+e5ef449 fix(data): P0-NEW-2 add deleted_at/user_id to client_notes (注：实际是 P1-NEW-2)
+64b75d0 fix(security): P1-NEW-1 parameterize reports.js SQL queries
+c77b40a fix(security): P0-NEW-4 fix sql.js predicate bug in interviews + tasks
+e8f46b2 fix(data): P0-NEW-3 mutex on scanOverdueRecommendations
+ac76221 fix(data): P0-NEW-2 optimistic lock on candidate_tags version
+781ca9a fix(security): P0-NEW-1 trust proxy=loopback to prevent XFF bypass
+df6c776 fix(test): migrate db state to globalThis + beforeAll(init) in auth.test.js
+1f9605f snapshot: pre-fix state for 12 new P0/P1 bugs
+```
+
+**剩余工作**（留 v3.1+）：
+- BFF E2E 跑 `tests/e2e-p0.js` 完整套件（未在本轮跑；当前仅 smoke test 4 个核心 endpoint）
+- candidate-detail.html 加载更多 button 逻辑（P1-NEW-5 已 wire-up API，但前端 loadMore 实际逻辑 v3.1 留）
+- client_notes PUT 端点的 user_id 权限校验（本轮 P1-NEW-2 只改了 DELETE；PUT 已用 before.user_id 检查但应该 P1-NEW-6 一并 review）
+- P2/P3 阶段 bug 仍待修（20+ 个，见 §6-7）
+
+---
+
 ## 附录 A：E2E 测试命令模板
 
 ```bash
