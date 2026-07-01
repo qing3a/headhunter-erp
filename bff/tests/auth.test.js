@@ -1,12 +1,12 @@
 // tests/auth.test.js - 认证模块单测
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
-import { init, getDb } from '../src/db/init.js';
+// 在本文件 beforeAll 里 init，与测试共享同一 worker 的模块状态
+import { describe, it, expect, beforeAll } from 'vitest';
+import { init, isReady } from '../src/db/init.js';
 import authService from '../src/services/authService.js';
 
 describe('authService', () => {
-  // 每次测试都重新 init（vitest 4.x 模块状态隔离）
-  beforeEach(async () => {
-    await init();
+  beforeAll(async () => {
+    if (!isReady()) await init();
   });
 
   describe('createUser + login', () => {

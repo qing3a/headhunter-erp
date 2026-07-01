@@ -3,85 +3,95 @@ const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 
-let db;
-let dbPath;
-let sqlDbRef;
+// 用 globalThis 存 DB 状态。
+// 原因：vitest 4.x 在 worker 间不复用模块实例（即使 isolate: false），
+// 多个模块实例化各持一份 `let db`，互相看不到对方赋值。
+// globalThis 保证单进程内唯一，跨模块实例共享。
+if (!globalThis.__ERP_DB_STATE__) {
+  globalThis.__ERP_DB_STATE__ = { db: null, dbPath: null, sqlDbRef: null, initPromise: null };
+}
+const STATE = globalThis.__ERP_DB_STATE__;
 
 async function init() {
-  const SQL = await initSqlJs();
+  // 防止并发 init 竞态
+  if (STATE.initPromise) return STATE.initPromise;
+  STATE.initPromise = (async () => {
+    const SQL = await initSqlJs();
 
-  dbPath = process.env.DB_PATH || path.join(__dirname, '../../data/erp.db');
-  const dir = path.dirname(dbPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+    STATE.dbPath = process.env.DB_PATH || path.join(__dirname, '../../data/erp.db');
+    const dir = path.dirname(STATE.dbPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
 
-  if (fs.existsSync(dbPath)) {
-    const fileBuffer = fs.readFileSync(dbPath);
-    sqlDbRef = new SQL.Database(fileBuffer);
-  } else {
-    sqlDbRef = new SQL.Database();
-  }
+    if (fs.existsSync(STATE.dbPath)) {
+      const fileBuffer = fs.readFileSync(STATE.dbPath);
+      STATE.sqlDbRef = new SQL.Database(fileBuffer);
+    } else {
+      STATE.sqlDbRef = new SQL.Database();
+    }
 
-  function saveDB() {
-    const data = sqlDbRef.export();
-    const buffer = Buffer.from(data);
-    fs.writeFileSync(dbPath, buffer);
-  }
+    function saveDB() {
+      const data = STATE.sqlDbRef.export();
+      const buffer = Buffer.from(data);
+      fs.writeFileSync(STATE.dbPath, buffer);
+    }
 
-  function prepare(sql) {
-    return {
-      get(...params) {
-        const stmt = sqlDbRef.prepare(sql);
-        stmt.bind(params);
-        let result = null;
-        if (stmt.step()) {
-          result = stmt.getAsObject();
-        }
-        stmt.free();
-        return result;
-      },
-      all(...params) {
-        const stmt = sqlDbRef.prepare(sql);
-        stmt.bind(params);
-        const rows = [];
-        while (stmt.step()) {
-          rows.push(stmt.getAsObject());
-        }
-        stmt.free();
-        return rows;
-      },
-      run(...params) {
-        const stmt = sqlDbRef.prepare(sql);
-        stmt.bind(params);
-        stmt.step();
-        const idRows = sqlDbRef.exec('SELECT last_insert_rowid() AS id');
-        const lastId = idRows[0] && idRows[0].values[0] ? Number(idRows[0].values[0][0]) : 0;
-        const chgRows = sqlDbRef.exec('SELECT changes() AS c');
-        const changes = chgRows[0] && chgRows[0].values[0] ? Number(chgRows[0].values[0][0]) : 0;
-        stmt.free();
+    function prepare(sql) {
+      return {
+        get(...params) {
+          const stmt = STATE.sqlDbRef.prepare(sql);
+          stmt.bind(params);
+          let result = null;
+          if (stmt.step()) {
+            result = stmt.getAsObject();
+          }
+          stmt.free();
+          return result;
+        },
+        all(...params) {
+          const stmt = STATE.sqlDbRef.prepare(sql);
+          stmt.bind(params);
+          const rows = [];
+          while (stmt.step()) {
+            rows.push(stmt.getAsObject());
+          }
+          stmt.free();
+          return rows;
+        },
+        run(...params) {
+          const stmt = STATE.sqlDbRef.prepare(sql);
+          stmt.bind(params);
+          stmt.step();
+          const idRows = STATE.sqlDbRef.exec('SELECT last_insert_rowid() AS id');
+          const lastId = idRows[0] && idRows[0].values[0] ? Number(idRows[0].values[0][0]) : 0;
+          const chgRows = STATE.sqlDbRef.exec('SELECT changes() AS c');
+          const changes = chgRows[0] && chgRows[0].values[0] ? Number(chgRows[0].values[0][0]) : 0;
+          stmt.free();
+          saveDB();
+          return { lastInsertRowid: lastId, changes: changes || 1 };
+        },
+      };
+    }
+
+    STATE.db = {
+      prepare,
+      exec(sql) {
+        STATE.sqlDbRef.exec(sql);
         saveDB();
-        return { lastInsertRowid: lastId, changes: changes || 1 };
       },
     };
-  }
 
-  db = {
-    prepare,
-    exec(sql) {
-      sqlDbRef.exec(sql);
-      saveDB();
-    },
-  };
-
-  createTables();
-  await seedUsersIfNeeded();
-  console.log('💾 Database initialized at', dbPath);
+    createTables();
+    await seedUsersIfNeeded();
+    console.log('💾 Database initialized at', STATE.dbPath);
+  })();
+  return STATE.initPromise;
 }
 
 function safeExec(sql) {
   try {
-    db.exec(sql);
+    STATE.db.exec(sql);
   } catch (err) {
     const msg = String(err.message || '');
     if (!/duplicate column|already exists/i.test(msg)) {
@@ -91,7 +101,7 @@ function safeExec(sql) {
 }
 
 function createTables() {
-  db.exec(`
+  STATE.db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
@@ -323,7 +333,7 @@ function createTables() {
   safeExec('ALTER TABLE users ADD COLUMN tokens_invalidated_after TEXT');
   // ===== 修复结束 =====
 
-  db.exec(`
+  STATE.db.exec(`
     CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);
     CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action);
     CREATE INDEX IF NOT EXISTS idx_interviews_user ON interviews(user_id);
@@ -387,15 +397,15 @@ async function seedUsersIfNeeded() {
   const demoHash = await bcrypt.hash('demo123', 10);
 
   if (isSeedRun) {
-    db.exec("DELETE FROM users WHERE username IN ('admin', 'demo')");
+    STATE.db.exec("DELETE FROM users WHERE username IN ('admin', 'demo')");
   }
 
-  db.prepare(`
+  STATE.db.prepare(`
     INSERT INTO users (username, password_hash, display_name, role)
     VALUES (?, ?, ?, ?)
   `).run('admin', adminHash, '系统管理员', 'admin');
 
-  db.prepare(`
+  STATE.db.prepare(`
     INSERT INTO users (username, password_hash, display_name, role)
     VALUES (?, ?, ?, ?)
   `).run('demo', demoHash, '演示顾问', 'consultant');
@@ -550,8 +560,14 @@ function seedCandidates() {
 }
 
 function getDb() {
-  if (!db) throw new Error('Database not initialized');
-  return db;
+  if (!STATE.db) {
+    throw new Error('Database not initialized');
+  }
+  return STATE.db;
+}
+
+function isReady() {
+  return !!STATE.db;
 }
 
 if (require.main === module) {
@@ -565,4 +581,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { init, getDb };
+module.exports = { init, getDb, isReady };
