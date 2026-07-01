@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>职位详情 - TalentFlow AI</title>
+  <link rel="stylesheet" href="../shared/shared.css">
+  <script src="../shared/auth.js"></script>
+  <script src="../shared/loading.js"></script>
+  <script src="../shared/router.js"></script>
+  <script src="../shared/api.js"></script>
+  <style id="pageStyle">
+    .job-detail-container { max-width: 960px; margin: 0 auto; }
+    .job-header { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; padding: 24px; margin-bottom: 16px; }
+    .job-header h1 { margin: 0 0 8px 0; font-size: 22px; font-weight: 600; }
+    .job-header .meta { color: var(--color-text-secondary); font-size: 14px; margin-bottom: 12px; }
+    .job-header .actions { display: flex; gap: 8px; }
+    .job-header .status-pill { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+    .job-header .status-pill.open { background: #d1fae5; color: #065f46; }
+    .job-header .status-pill.closed { background: #f3f4f6; color: #4b5563; }
+    .job-header .status-pill.on_hold { background: #fef3c7; color: #92400e; }
+
+    .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 24px; }
+    .info-grid .item .label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+    .info-grid .item .value { font-size: 14px; }
+
+    .section { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; padding: 24px; margin-bottom: 16px; }
+    .section h3 { margin: 0 0 16px 0; font-size: 15px; font-weight: 600; }
+
+    .rec-list { display: flex; flex-direction: column; gap: 8px; }
+    .rec-item { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--color-border-light); border-radius: 6px; }
+    .rec-item .info { flex: 1; }
+    .rec-item .name { font-weight: 500; }
+    .rec-item .meta { font-size: 12px; color: var(--color-text-secondary); }
+    .status-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+    .status-pill.recommended { background: #dbeafe; color: #1e40af; }
+    .status-pill.pending_feedback { background: #fef3c7; color: #92400e; }
+    .status-pill.interviewing { background: #cffafe; color: #155e75; }
+    .status-pill.offered { background: #ede9fe; color: #5b21b6; }
+    .status-pill.hired { background: #d1fae5; color: #065f46; }
+    .status-pill.rejected { background: #fee2e2; color: #991b1b; }
+    .status-pill.withdrawn { background: #f3f4f6; color: #4b5563; }
+
+    .desc-content { white-space: pre-wrap; line-height: 1.7; color: var(--color-text-primary); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div id="pageContent">
+    <div class="job-detail-container">
+      <div id="loadingHint" style="padding:60px;text-align:center;color:var(--color-text-secondary);">加载中...</div>
+
+      <div id="detailContainer" style="display:none;">
+        <!-- 头部 -->
+        <div class="job-header">
+          <h1 id="jobTitle">--</h1>
+          <div class="meta" id="jobMeta">--</div>
+          <div class="actions">
+            <span class="status-pill" id="jobStatus">--</span>
+            <button class="btn btn-primary" id="editBtn">编辑</button>
+            <button class="btn btn-secondary" id="toggleStatusBtn">--</button>
+            <button class="btn btn-secondary" id="deleteBtn" style="color:#dc2626;">删除</button>
+            <button class="btn btn-secondary" id="backBtn">返回列表</button>
+          </div>
+        </div>
+
+        <!-- 基本信息 -->
+        <div class="section">
+          <h3>基本信息</h3>
+          <div class="info-grid" id="basicInfo"></div>
+        </div>
+
+        <!-- 描述 -->
+        <div class="section" id="descSection" style="display:none;">
+          <h3>职位描述</h3>
+          <div class="desc-content" id="descContent"></div>
+        </div>
+
+        <!-- 推荐列表 -->
+        <div class="section">
+          <h3>推荐记录 <span id="recCount" style="color:var(--color-text-secondary);font-weight:normal;font-size:13px;"></span></h3>
+          <div class="rec-list" id="recList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script id="pageScript">
+    (function () {
+      var jobId = null;
+      var current = null;
+
+      function on(id, evt, handler) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener(evt, handler);
+      }
+
+      function escapeHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+
+      function statusLabel(s) {
+        return { open: '招聘中', closed: '已关闭', on_hold: '暂停' }[s] || s;
+      }
+      function recStatusLabel(s) {
+        return { recommended: '已推荐', pending_feedback: '待反馈', interviewing: '面试中',
+                 offered: '已发 offer', hired: '已入职', rejected: '已拒绝', withdrawn: '已撤回' }[s] || s;
+      }
+      function eduLabel(s) {
+        return { highschool: '高中及以上', bachelor: '本科及以上', master: '硕士及以上', phd: '博士及以上' }[s] || s || '不限制';
+      }
+
+      function loadDetail() {
+        window.API.jobs.get(jobId).then(function (r) {
+          if (!r || !r.ok) {
+            document.getElementById('loadingHint').textContent = '加载失败：' + (r && r.error && r.error.message || '职位不存在');
+            return;
+          }
+          current = r.data;
+          document.getElementById('loadingHint').style.display = 'none';
+          document.getElementById('detailContainer').style.display = '';
+
+          // 头部
+          document.getElementById('jobTitle').textContent = current.title;
+          var meta = [];
+          if (current.company) meta.push(current.company);
+          if (current.department) meta.push(current.department);
+          if (current.city) meta.push(current.city);
+          if (current.industry) meta.push(current.industry);
+          document.getElementById('jobMeta').textContent = meta.join(' · ') || '-';
+
+          var statusPill = document.getElementById('jobStatus');
+          statusPill.textContent = statusLabel(current.status);
+          statusPill.className = 'status-pill ' + (current.status || 'open');
+
+          var toggleBtn = document.getElementById('toggleStatusBtn');
+          toggleBtn.textContent = current.status === 'closed' ? '重新开放' : '关闭职位';
+
+          // 基本信息
+          var info = [];
+          info.push({ label: '薪资范围', value: (current.salary_min || current.salary_max) ? (current.salary_min || '?') + ' - ' + (current.salary_max || '?') + ' k' : '面议' });
+          info.push({ label: '经验要求', value: (current.experience_min || current.experience_max) ? (current.experience_min || '?') + ' - ' + (current.experience_max || '?') + ' 年' : '不限' });
+          info.push({ label: '学历要求', value: eduLabel(current.education_level) });
+          info.push({ label: '行业', value: current.industry || '-' });
+          info.push({ label: '部门', value: current.department || '-' });
+          info.push({ label: '城市', value: current.city || '-' });
+          info.push({ label: '创建时间', value: (current.created_at || '').substring(0, 10) });
+          info.push({ label: '更新时间', value: (current.updated_at || '').substring(0, 10) });
+          info.push({ label: '来源', value: current.source || 'local' });
+          document.getElementById('basicInfo').innerHTML = info.map(function (i) {
+            return '<div class="item"><div class="label">' + escapeHtml(i.label) + '</div><div class="value">' + escapeHtml(i.value) + '</div></div>';
+          }).join('');
+
+          // 描述
+          if (current.description) {
+            document.getElementById('descSection').style.display = '';
+            document.getElementById('descContent').textContent = current.description;
+          }
+
+          // 推荐列表
+          loadRecommendations();
+        });
+      }
+
+      function loadRecommendations() {
+        window.API.recommendations.list({ job_id: jobId }).then(function (r) {
+          if (!r || !r.ok) return;
+          var list = r.data || [];
+          document.getElementById('recCount').textContent = '（' + list.length + '）';
+          var container = document.getElementById('recList');
+          if (!list.length) {
+            container.innerHTML = '<div style="color:var(--color-text-secondary);text-align:center;padding:20px;">暂无推荐</div>';
+            return;
+          }
+          container.innerHTML = list.map(function (r) {
+            return '<div class="rec-item" data-rid="' + r.id + '">' +
+              '<div class="info">' +
+                '<div class="name">' + escapeHtml(r.candidate_name || '候选人 #' + r.candidate_id) + '</div>' +
+                '<div class="meta">' + escapeHtml(r.recommend_username || '-') + ' · ' + (r.recommend_at || '').substring(0, 10) + '</div>' +
+              '</div>' +
+              '<span class="status-pill ' + escapeHtml(r.status) + '">' + recStatusLabel(r.status) + '</span>' +
+            '</div>';
+          }).join('');
+
+          // 点击 rec-item 跳候选人详情
+          container.querySelectorAll('.rec-item').forEach(function (el) {
+            el.addEventListener('click', function () {
+              var rid = el.getAttribute('data-rid');
+              // rec 没暴露 candidate_id 字段，简化跳候选人池
+              window.Router.navigate('candidate-pool.html');
+            });
+          });
+        });
+      }
+
+      function bindEvents() {
+        on('backBtn', 'click', function () { window.Router.navigate('job-management.html'); });
+        on('editBtn', 'click', function () { window.UI.showToast({ type: 'info', title: '编辑', message: '请到职位管理列表编辑' }); });
+        on('toggleStatusBtn', 'click', function () {
+          if (!current) return;
+          var newStatus = current.status === 'closed' ? 'open' : 'closed';
+          window.API.jobs.update(jobId, { status: newStatus }).then(function (r) {
+            if (r && r.ok) {
+              window.UI.showToast({ type: 'success', title: '已更新', message: '状态已更新' });
+              loadDetail();
+            }
+          });
+        });
+        on('deleteBtn', 'click', function () {
+          if (!current) return;
+          window.UI.showConfirm({
+            title: '确认删除',
+            content: '确定删除职位 "' + current.title + '"？此操作不可恢复。',
+            type: 'warning',
+            confirmText: '删除',
+            onConfirm: function () {
+              window.API.jobs.remove(jobId).then(function (r) {
+                if (r && r.ok) {
+                  window.UI.showToast({ type: 'success', title: '已删除', message: '' });
+                  setTimeout(function () { window.Router.navigate('job-management.html'); }, 600);
+                }
+              });
+            }
+          });
+        });
+      }
+
+      function init() {
+        jobId = parseInt(window.Router.getParam('id'));
+        if (!jobId) {
+          window.Router.navigate('job-management.html');
+          return;
+        }
+        bindEvents();
+        loadDetail();
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+  <script src="../shared/shared.js"></script>
+  <script src="../shared/layout.js"></script>
+</body>
+</html>

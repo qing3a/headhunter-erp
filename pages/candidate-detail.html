@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>候选人详情</title>
+  <link rel="stylesheet" href="../shared/shared.css">
+  <script src="../shared/auth.js"></script>
+  <script src="../shared/menu-config.js"></script>
+  <script src="../shared/loading.js"></script>
+  <script src="../shared/router.js"></script>
+  <script src="../shared/api.js"></script>
+  <script src="../shared/candidate-form.js"></script>
+  <style id="pageStyle">
+    .profile-header { display: flex; gap: 20px; align-items: flex-start; background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; padding: 24px; margin-bottom: 16px; }
+    .profile-header .avatar-block { flex-shrink: 0; }
+    .profile-header .info-block { flex: 1; min-width: 0; }
+    .profile-header h1 { margin: 0 0 4px 0; font-size: 22px; font-weight: 600; }
+    .profile-header .meta { color: var(--color-text-secondary); font-size: 14px; margin-bottom: 8px; }
+    .profile-header .tags-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .profile-header .actions { flex-shrink: 0; display: flex; gap: 8px; }
+
+    .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 32px; }
+    .info-grid .info-item .label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+    .info-grid .info-item .value { font-size: 14px; color: var(--color-text-primary); }
+
+    .sub-list { display: flex; flex-direction: column; gap: 12px; }
+    .sub-item { background: var(--color-bg-page-secondary, #f9fafb); border: 1px solid var(--color-border-light); border-radius: 8px; padding: 16px; display: flex; gap: 12px; align-items: flex-start; }
+    .sub-item .sub-content { flex: 1; }
+    .sub-item .sub-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+    .sub-item .sub-meta { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 6px; }
+    .sub-item .sub-desc { font-size: 13px; line-height: 1.6; }
+    .sub-item .sub-actions { flex-shrink: 0; display: flex; gap: 4px; }
+    .sub-item .sub-actions .btn-link { background: none; border: none; color: var(--color-text-secondary); cursor: pointer; font-size: 13px; padding: 4px 8px; }
+    .sub-item .sub-actions .btn-link:hover { color: var(--color-primary); }
+    .sub-item .sub-actions .btn-link.danger:hover { color: #dc2626; }
+
+    .timeline { position: relative; padding-left: 28px; }
+    .timeline::before { content: ''; position: absolute; left: 8px; top: 8px; bottom: 8px; width: 2px; background: var(--color-border-light); }
+    .timeline-item { position: relative; padding-bottom: 20px; }
+    .timeline-item::before { content: ''; position: absolute; left: -24px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--color-primary); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--color-primary); }
+    .timeline-item .time { font-size: 12px; color: var(--color-text-secondary); }
+    .timeline-item .title { font-weight: 500; margin: 2px 0; }
+    .timeline-item .desc { font-size: 13px; color: var(--color-text-secondary); }
+
+    .sub-section { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .sub-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .sub-section-header h3 { margin: 0; font-size: 15px; font-weight: 600; }
+
+    .empty-sub { text-align: center; padding: 40px 20px; color: var(--color-text-secondary); font-size: 13px; }
+
+    .status-pill { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+    .status-pill.active { background: #d1fae5; color: #065f46; }
+    .status-pill.passive { background: #fef3c7; color: #92400e; }
+    .status-pill.placed { background: #dbeafe; color: #1e40af; }
+    .status-pill.unavailable { background: #f3f4f6; color: #4b5563; }
+    .status-pill.blacklist { background: #fee2e2; color: #991b1b; }
+    .status-pill.recommended { background: #dbeafe; color: #1e40af; }
+    .status-pill.pending_feedback { background: #fef3c7; color: #92400e; }
+    .status-pill.interviewing { background: #cffafe; color: #155e75; }
+    .status-pill.offered { background: #ede9fe; color: #5b21b6; }
+    .status-pill.hired { background: #d1fae5; color: #065f46; }
+    .status-pill.withdrawn { background: #f3f4f6; color: #4b5563; }
+
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; background: var(--color-primary-lightest, #CCFBF1); color: var(--color-primary-dark, #0F766E); }
+
+    .form-row { display: flex; gap: 12px; }
+    .form-row .form-group { flex: 1; }
+  </style>
+</head>
+<body>
+  <div id="pageContent">
+    <nav class="breadcrumb">
+      <a href="candidate-pool.html">候选人库</a>
+      <span class="breadcrumb-separator">/</span>
+      <span class="breadcrumb-item active" id="breadName">加载中...</span>
+    </nav>
+
+    <div id="loadingHint" style="padding:60px 20px;text-align:center;color:var(--color-text-secondary);">加载中...</div>
+
+    <div id="detailContainer" style="display:none;">
+      <div class="profile-header">
+        <div class="avatar-block">
+          <div class="avatar avatar-lg" id="profileAvatar" style="width:64px;height:64px;background:var(--color-primary-lightest);color:var(--color-primary-dark);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:600;border-radius:50%;"></div>
+        </div>
+        <div class="info-block">
+          <h1 id="profileName">--</h1>
+          <div class="meta" id="profileMeta">--</div>
+          <div class="tags-row" id="profileTags"></div>
+        </div>
+        <div class="actions">
+          <button id="editBtn" class="btn btn-primary">编辑</button>
+          <button id="deleteBtn" class="btn btn-secondary">删除</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab-item active" data-tab="basic">基本信息</div>
+        <div class="tab-item" data-tab="experience">工作经历 <span class="badge" id="expCount"></span></div>
+        <div class="tab-item" data-tab="education">教育背景 <span class="badge" id="eduCount"></span></div>
+        <div class="tab-item" data-tab="contact">联系记录 <span class="badge" id="contactCount"></span></div>
+        <div class="tab-item" data-tab="recommendation">推荐记录 <span class="badge" id="recCount"></span></div>
+        <div class="tab-item" data-tab="timeline">时间线</div>
+      </div>
+
+      <!-- Tab 1: 基本信息 -->
+      <div class="tab-content active" data-tab-content="basic">
+        <div class="sub-section">
+          <div class="sub-section-header"><h3>个人资料</h3></div>
+          <div class="info-grid" id="basicInfo"></div>
+        </div>
+        <div class="sub-section">
+          <div class="sub-section-header"><h3>求职意向</h3></div>
+          <div class="info-grid" id="jobIntention"></div>
+        </div>
+        <div class="sub-section">
+          <div class="sub-section-header"><h3>来源与备注</h3></div>
+          <div class="info-grid" id="sourceInfo"></div>
+          <div style="margin-top:16px;">
+            <div class="label" style="font-size:12px;color:var(--color-text-secondary);margin-bottom:6px;">备注</div>
+            <div id="notesContent" style="font-size:14px;line-height:1.6;white-space:pre-wrap;">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: 工作经历 -->
+      <div class="tab-content" data-tab-content="experience">
+        <div class="sub-section">
+          <div class="sub-section-header">
+            <h3>工作经历</h3>
+            <button class="btn btn-primary btn-sm" data-action="add-experience">+ 添加工作经历</button>
+          </div>
+          <div class="sub-list" id="experienceList"></div>
+          <div class="load-more-bar" id="expMoreBar" style="display:none;text-align:center;padding:12px;">
+            <button class="btn btn-secondary btn-sm" id="expMoreBtn">加载更多</button>
+            <span id="expMoreHint" style="margin-left:8px;color:var(--color-text-secondary);font-size:12px;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: 教育背景 -->
+      <div class="tab-content" data-tab-content="education">
+        <div class="sub-section">
+          <div class="sub-section-header">
+            <h3>教育背景</h3>
+            <button class="btn btn-primary btn-sm" data-action="add-education">+ 添加教育背景</button>
+          </div>
+          <div class="sub-list" id="educationList"></div>
+          <div class="load-more-bar" id="eduMoreBar" style="display:none;text-align:center;padding:12px;">
+            <button class="btn btn-secondary btn-sm" id="eduMoreBtn">加载更多</button>
+            <span id="eduMoreHint" style="margin-left:8px;color:var(--color-text-secondary);font-size:12px;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 4: 联系记录 -->
+      <div class="tab-content" data-tab-content="contact">
+        <div class="sub-section">
+          <div class="sub-section-header">
+            <h3>联系记录</h3>
+            <button class="btn btn-primary btn-sm" data-action="add-contact">+ 添加联系记录</button>
+          </div>
+          <div class="sub-list" id="contactList"></div>
+          <div class="load-more-bar" id="contactMoreBar" style="display:none;text-align:center;padding:12px;">
+            <button class="btn btn-secondary btn-sm" id="contactMoreBtn">加载更多</button>
+            <span id="contactMoreHint" style="margin-left:8px;color:var(--color-text-secondary);font-size:12px;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 5: 推荐记录 -->
+      <div class="tab-content" data-tab-content="recommendation">
+        <div class="sub-section">
+          <div class="sub-section-header">
+            <h3>推荐记录</h3>
+            <button class="btn btn-primary btn-sm" data-action="add-recommendation">+ 推荐给职位</button>
+          </div>
+          <div class="sub-list" id="recommendationList"></div>
+        </div>
+      </div>
+
+      <!-- Tab 6: 时间线 -->
+      <div class="tab-content" data-tab-content="timeline">
+        <div class="sub-section">
+          <div class="sub-section-header"><h3>活动时间线</h3></div>
+          <div class="timeline" id="timelineList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script id="pageScript">
+    (function () {
+      var candidateId;
+      var current = null;
+
+      function on(id, evt, handler) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener(evt, handler);
+      }
+
+      function escapeHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+
+      function statusLabel(s) {
+        return { active: '活跃求职', passive: '被动考虑', placed: '已入职',
+                 unavailable: '暂不考虑', blacklist: '黑名单' }[s] || s || '-';
+      }
+      function availableLabel(s) {
+        return { immediate: '立即到岗', two_weeks: '2 周内', one_month: '1 个月内',
+                 three_months: '3 个月内' }[s] || s || '暂未确定';
+      }
+      function degreeLabel(s) {
+        return { highschool: '高中', bachelor: '本科', master: '硕士', phd: '博士' }[s] || s || '-';
+      }
+      function contactTypeLabel(s) {
+        return { phone: '电话', wechat: '微信', email: '邮件', in_person: '面谈', other: '其他' }[s] || s || '-';
+      }
+
+      function infoItem(label, value) {
+        return '<div class="info-item"><div class="label">' + escapeHtml(label) + '</div>' +
+               '<div class="value">' + (value ? escapeHtml(value) : '--') + '</div></div>';
+      }
+
+      function renderBasic(c) {
+        var html = '';
+        html += infoItem('姓名', c.name);
+        html += infoItem('性别', { male: '男', female: '女', other: '其他' }[c.gender] || '--');
+        html += infoItem('手机号', c.phone);
+        html += infoItem('邮箱', c.email);
+        html += infoItem('所在城市', c.current_city);
+        html += infoItem('工作年限', c.years_of_experience != null ? c.years_of_experience + ' 年' : '');
+        html += infoItem('学历', degreeLabel(c.education_level));
+        html += infoItem('当前公司 / 职位', (c.current_company || '') + (c.current_company && c.current_position ? ' · ' : '') + (c.current_position || ''));
+        document.getElementById('basicInfo').innerHTML = html;
+
+        var jHtml = '';
+        jHtml += infoItem('期望职位', c.expected_position);
+        jHtml += infoItem('期望行业', c.expected_industry);
+        jHtml += infoItem('期望城市', c.expected_city);
+        jHtml += infoItem('期望薪资', (c.expected_salary_min || c.expected_salary_max) ?
+          (c.expected_salary_min || '?') + ' - ' + (c.expected_salary_max || '?') + ' k' : '');
+        jHtml += infoItem('到岗时间', availableLabel(c.available_at));
+        jHtml += infoItem('求职状态', '<span class="status-pill ' + escapeHtml(c.status) + '">' + statusLabel(c.status) + '</span>');
+        document.getElementById('jobIntention').innerHTML = jHtml;
+
+        var sHtml = '';
+        sHtml += infoItem('来源渠道', { linkedin: 'LinkedIn', referral: '朋友推荐', website: '官网', headhunter: '其他猎头', other: '其他' }[c.source_channel] || c.source_channel);
+        sHtml += infoItem('来源详情', c.source_detail);
+        sHtml += infoItem('创建时间', c.created_at);
+        sHtml += infoItem('更新时间', c.updated_at);
+        document.getElementById('sourceInfo').innerHTML = sHtml;
+        document.getElementById('notesContent').textContent = c.notes || '--';
+      }
+
+      function renderHeader(c) {
+        document.getElementById('breadName').textContent = c.name;
+        document.getElementById('profileName').textContent = c.name;
+        document.getElementById('profileMeta').textContent =
+          (c.current_position || '-') + ' · ' + (c.current_company || '-') + (c.years_of_experience != null ? ' · ' + c.years_of_experience + ' 年经验' : '');
+        document.getElementById('profileAvatar').textContent = c.name ? c.name.charAt(0).toUpperCase() : '?';
+        var tagsHtml = '<span class="status-pill ' + escapeHtml(c.status) + '">' + statusLabel(c.status) + '</span>';
+        (c.tags || []).forEach(function (t) {
+          tagsHtml += '<span class="tag">' + escapeHtml(t) + '</span>';
+        });
+        document.getElementById('profileTags').innerHTML = tagsHtml;
+      }
+
+      // ===== P1-6 修复：子表分页渲染（每次 50 条）=====
+      var SUB_PAGE_SIZE = 50;
+      var subState = { exp: { all: [], offset: 0 }, edu: { all: [], offset: 0 }, contact: { all: [], offset: 0 } };
+
+      function renderExperiences(list) {
+        subState.exp.all = list || [];
+        subState.exp.offset = 0;
+        renderExperiencesPage();
+      }
+      function renderExperiencesPage() {
+        var s = subState.exp;
+        var visible = s.all.slice(0, s.offset + SUB_PAGE_SIZE);
+        document.getElementById('expCount').textContent = s.all.length ? '· ' + s.all.length : '';
+        var c = document.getElementById('experienceList');
+        if (!visible.length) { c.innerHTML = '<div class="empty-sub">暂无工作经历</div>'; updateMoreBar('exp'); return; }
+        c.innerHTML = visible.map(expItemHtml).join('');
+        updateMoreBar('exp');
+      }
+      function expItemHtml(e) {
+        return '<div class="sub-item" data-id="' + e.id + '">' +
+          '<div class="sub-content">' +
+            '<div class="sub-title">' + escapeHtml(e.company) + ' · ' + escapeHtml(e.position || '-') + '</div>' +
+            '<div class="sub-meta">' + escapeHtml((e.start_date || '') + ' ~ ' + (e.end_date || '至今')) +
+              (e.salary ? ' · 薪资 ' + escapeHtml(e.salary) : '') +
+              (e.is_current ? ' · <span class="status-pill active">在职</span>' : '') + '</div>' +
+            (e.description ? '<div class="sub-desc">' + escapeHtml(e.description) + '</div>' : '') +
+          '</div>' +
+            '<div class="sub-actions">' +
+              '<button class="btn-link" data-act="edit">编辑</button>' +
+              '<button class="btn-link danger" data-act="delete">删除</button>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      }
+
+      function renderEducations(list) {
+        subState.edu.all = list || [];
+        subState.edu.offset = 0;
+        renderEducationsPage();
+      }
+      function renderEducationsPage() {
+        var s = subState.edu;
+        var visible = s.all.slice(0, s.offset + SUB_PAGE_SIZE);
+        document.getElementById('eduCount').textContent = s.all.length ? '· ' + s.all.length : '';
+        var c = document.getElementById('educationList');
+        if (!visible.length) { c.innerHTML = '<div class="empty-sub">暂无教育背景</div>'; updateMoreBar('edu'); return; }
+        c.innerHTML = visible.map(eduItemHtml).join('');
+        updateMoreBar('edu');
+      }
+      function eduItemHtml(e) {
+        return '<div class="sub-item" data-id="' + e.id + '">' +
+          '<div class="sub-content">' +
+            '<div class="sub-title">' + escapeHtml(e.school) + ' · ' + escapeHtml(degreeLabel(e.degree)) + (e.major ? ' · ' + escapeHtml(e.major) : '') + '</div>' +
+            '<div class="sub-meta">' + escapeHtml((e.start_date || '') + ' ~ ' + (e.end_date || '至今')) +
+              (e.is_current ? ' · <span class="status-pill active">在读</span>' : '') + '</div>' +
+          '</div>' +
+          '<div class="sub-actions">' +
+            '<button class="btn-link" data-act="edit">编辑</button>' +
+            '<button class="btn-link danger" data-act="delete">删除</button>' +
+          '</div>' +
+        '</div>';
+      }
+
+      function renderContacts(list) {
+        subState.contact.all = list || [];
+        subState.contact.offset = 0;
+        renderContactsPage();
+      }
+      function renderContactsPage() {
+        var s = subState.contact;
+        var visible = s.all.slice(0, s.offset + SUB_PAGE_SIZE);
+        document.getElementById('contactCount').textContent = s.all.length ? '· ' + s.all.length : '';
+        var c = document.getElementById('contactList');
+        if (!visible.length) { c.innerHTML = '<div class="empty-sub">暂无联系记录</div>'; updateMoreBar('contact'); return; }
+        c.innerHTML = visible.map(contactItemHtml).join('');
+        updateMoreBar('contact');
+      }
+      function contactItemHtml(e) {
+        return '<div class="sub-item" data-id="' + e.id + '">' +
+          '<div class="sub-content">' +
+            '<div class="sub-title">' + escapeHtml(contactTypeLabel(e.contact_type)) + ' · ' + escapeHtml(e.contact_at || '-') + '</div>' +
+            (e.content ? '<div class="sub-desc">' + escapeHtml(e.content) + '</div>' : '') +
+            (e.next_follow_up_at ? '<div class="sub-meta">下次跟进：' + escapeHtml(e.next_follow_up_at) + '</div>' : '') +
+          '</div>' +
+          '<div class="sub-actions">' +
+            '<button class="btn-link" data-act="edit">编辑</button>' +
+            '<button class="btn-link danger" data-act="delete">删除</button>' +
+          '</div>' +
+        '</div>';
+      }
+
+      // ===== P1-6 辅助：分页状态 + 加载更多 UI 控制 =====
+      function updateMoreBar(type) {
+        var s = subState[type];
+        var bar = document.getElementById(type + 'MoreBar');
+        var hint = document.getElementById(type + 'MoreHint');
+        if (!bar) return;
+        if (s.all.length === 0) { bar.style.display = 'none'; return; }
+        var shown = s.offset + SUB_PAGE_SIZE;
+        if (shown >= s.all.length) {
+          bar.style.display = 'none';
+        } else {
+          bar.style.display = '';
+          if (hint) hint.textContent = '已显示 ' + Math.min(shown, s.all.length) + ' / ' + s.all.length;
+        }
+      }
+      function loadMoreSub(type, renderPage) {
+        var s = subState[type];
+        s.offset += SUB_PAGE_SIZE;
+        renderPage();
+      }
+
+      function recStatusLabel(s) {
+        return { recommended: '已推荐', pending_feedback: '待反馈', interviewing: '面试中',
+                 offered: '已发 offer', hired: '已入职', rejected: '已拒绝', withdrawn: '已撤回' }[s] || s || '-';
+      }
+
+      function renderRecommendations(list) {
+        document.getElementById('recCount').textContent = list.length ? '· ' + list.length : '';
+        var c = document.getElementById('recommendationList');
+        if (!list.length) { c.innerHTML = '<div class="empty-sub">暂无推荐记录，点击右上角"+ 推荐给职位"创建</div>'; return; }
+        c.innerHTML = list.map(function (r) {
+          return '<div class="sub-item" data-id="' + r.id + '">' +
+            '<div class="sub-content">' +
+              '<div class="sub-title">' + escapeHtml(r.job_title || '未命名职位') +
+                (r.job_company ? ' · ' + escapeHtml(r.job_company) : '') + '</div>' +
+              '<div class="sub-meta">' +
+                '<span class="status-pill ' + escapeHtml(r.status) + '">' + recStatusLabel(r.status) + '</span>' +
+                (r.client_name ? ' · 客户：' + escapeHtml(r.client_name) : '') +
+                (r.recommend_username ? ' · 推荐人：' + escapeHtml(r.recommend_username) : '') +
+                ' · 推荐时间：' + (r.recommend_at || '-').substring(0, 10) +
+                (r.recommend_method ? ' · ' + escapeHtml(r.recommend_method) : '') +
+              '</div>' +
+              (r.notes ? '<div class="sub-desc">' + escapeHtml(r.notes) + '</div>' : '') +
+            '</div>' +
+            '<div class="sub-actions">' +
+              '<button class="btn-link" data-act="change-status">变更状态</button>' +
+              '<button class="btn-link" data-act="edit">编辑</button>' +
+              '<button class="btn-link danger" data-act="delete">删除</button>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      }
+
+      function renderTimeline(c) {
+        var events = [];
+        events.push({ time: c.created_at, type: 'create', title: '创建档案', desc: '由 ' + (c.user_id ? '用户 #' + c.user_id : '系统') + ' 创建' });
+        // ===== v2-2 (P2-C2) 修复：时间线加 audit_log 事件（含改名）=====
+        (c.audit_log || []).forEach(function (a) {
+          if (a.action === 'CREATE_candidate' || a.action === 'CHANGE_PASSWORD') return;  // 已有"创建档案" + 改密不必展示
+          events.push({ time: a.created_at, type: 'audit', title: a.summary || a.action, desc: '用户 #' + a.user_id });
+        });
+        // ===== 修复结束 =====
+        if (c.updated_at && c.updated_at !== c.created_at) {
+          events.push({ time: c.updated_at, type: 'update', title: '更新档案', desc: '' });
+        }
+        (c.experiences || []).forEach(function (e) {
+          events.push({ time: e.created_at, type: 'experience', title: '工作经历：' + e.company, desc: e.position });
+        });
+        (c.educations || []).forEach(function (e) {
+          events.push({ time: e.created_at, type: 'education', title: '教育背景：' + e.school, desc: degreeLabel(e.degree) });
+        });
+        (c.contacts || []).forEach(function (e) {
+          events.push({ time: e.contact_at || e.created_at, type: 'contact', title: '联系记录：' + contactTypeLabel(e.contact_type), desc: e.content });
+        });
+        // ===== P2-C3 修复：时间线加 recommendations 事件 =====
+        // 软删的已被后端 SQL 过滤（candidates.js L154 WHERE r.deleted_at IS NULL），前端不再过滤
+        (c.recommendations || []).forEach(function (r) {
+          var eventTime = r.last_status_change_at || r.recommend_at;
+          events.push({ time: eventTime, type: 'recommendation', title: '推荐 ' + (r.job_title || '职位') + '：' + recStatusLabel(r.status), desc: r.recommend_username ? '推荐人：' + r.recommend_username : '' });
+        });
+        events.sort(function (a, b) { return (b.time || '').localeCompare(a.time || ''); });
+        // ===== v2-7 (P3-17) 修复：requestAnimationFrame 异步分块渲染 =====
+        // 大数据时（>100 events）一次性 join 可能阻塞主线程；用 RAF 异步分块
+        var CHUNK_SIZE = 20;
+        var idx = 0;
+        var htmlParts = [];
+        var targetEl = document.getElementById('timelineList');
+        function renderChunk() {
+          var end = Math.min(idx + CHUNK_SIZE, events.length);
+          for (var i = idx; i < end; i++) {
+            var e = events[i];
+            htmlParts.push(
+              '<div class="timeline-item">' +
+                '<div class="time">' + escapeHtml(e.time || '') + '</div>' +
+                '<div class="title">' + escapeHtml(e.title) + '</div>' +
+                (e.desc ? '<div class="desc">' + escapeHtml(e.desc) + '</div>' : '') +
+              '</div>'
+            );
+          }
+          targetEl.innerHTML = htmlParts.join('');
+          idx = end;
+          if (idx < events.length) {
+            requestAnimationFrame(renderChunk);
+          }
+        }
+        if (events.length === 0) {
+          targetEl.innerHTML = '<div class="empty-sub">暂无事件</div>';
+        } else {
+          requestAnimationFrame(renderChunk);
+        }
+        // ===== 修复结束 =====
+      }
+
+      // 子表 modal
+      function openExperienceModal(existing) {
+        var isEdit = !!existing;
+        var e = existing || {};
+        var html = '<form id="subForm" class="form">' +
+          '<div class="form-row">' +
+            '<div class="form-group"><label class="form-label required">公司</label><input class="form-input" name="company" required value="' + escapeHtml(e.company || '') + '"></div>' +
+            '<div class="form-group"><label class="form-label">职位</label><input class="form-input" name="position" value="' + escapeHtml(e.position || '') + '"></div>' +
+          '</div>' +
+          '<div class="form-row" style="margin-top:12px;">' +
+            '<div class="form-group"><label class="form-label">入职时间</label><input class="form-input" name="start_date" placeholder="YYYY-MM" value="' + escapeHtml(e.start_date || '') + '"></div>' +
+            '<div class="form-group"><label class="form-label">离职时间</label><input class="form-input" name="end_date" placeholder="YYYY-MM 或 present" value="' + escapeHtml(e.end_date || '') + '"></div>' +
+          '</div>' +
+          '<div class="form-row" style="margin-top:12px;">' +
+            '<div class="form-group"><label class="form-label">薪资</label><input class="form-input" name="salary" value="' + escapeHtml(e.salary || '') + '"></div>' +
+            '<div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;"><input type="checkbox" name="is_current"' + (e.is_current ? ' checked' : '') + '> 至今在职</label></div>' +
+          '</div>' +
+          '<div class="form-group" style="margin-top:12px;"><label class="form-label">工作描述</label><textarea class="form-textarea" name="description" rows="3">' + escapeHtml(e.description || '') + '</textarea></div>' +
+        '</form>';
+        var modal = window.UI.showModal({
+          title: isEdit ? '编辑工作经历' : '添加工作经历',
+          content: html, confirmText: '保存', cancelText: '取消', showCancel: true, width: 600,
+          onConfirm: function () { submitExperience(isEdit, existing); }
+        });
+      }
+
+      function submitExperience(isEdit, existing) {
+        var form = document.getElementById('subForm');
+        if (!form) return;
+        if (!window.UI.validateForm(form)) return;
+        var btn = document.querySelector('.modal.show [data-action="confirm"]');
+        if (btn) { btn.disabled = true; btn.textContent = '保存中...'; }
+        var data = {};
+        ['company', 'position', 'start_date', 'end_date', 'salary', 'description'].forEach(function (k) {
+          if (form.elements[k].value !== '') data[k] = form.elements[k].value;
+        });
+        data.is_current = form.elements.is_current.checked ? 1 : 0;
+        var p = isEdit
+          ? window.API.candidates.updateExperience(candidateId, existing.id, data)
+          : window.API.candidates.createExperience(candidateId, data);
+        p.then(function (r) {
+          if (r && r.ok) {
+            window.UI.showToast({ type: 'success', title: '已保存', message: '' });
+            loadDetail();
+          } else {
+            if (btn) { btn.disabled = false; btn.textContent = '保存'; }
+          }
+        }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = '保存'; } });
+      }
+
+      function openEducationModal(existing) {
+        var isEdit = !!existing;
+        var e = existing || {};
+        var html = '<form id="subForm" class="form">' +
+          '<div class="form-group"><label class="form-label required">学校</label><input class="form-input" name="school" required value="' + escapeHtml(e.school || '') + '"></div>' +
+          '<div class="form-row" style="margin-top:12px;">' +
+            '<div class="form-group"><label class="form-label">专业</label><input class="form-input" name="major" value="' + escapeHtml(e.major || '') + '"></div>' +
+            '<div class="form-group"><label class="form-label">学历</label><select class="form-select" name="degree"><option value="">不填</option>' +
+              '<option value="highschool"' + (e.degree === 'highschool' ? ' selected' : '') + '>高中</option>' +
+              '<option value="bachelor"' + (e.degree === 'bachelor' ? ' selected' : '') + '>本科</option>' +
+              '<option value="master"' + (e.degree === 'master' ? ' selected' : '') + '>硕士</option>' +
+              '<option value="phd"' + (e.degree === 'phd' ? ' selected' : '') + '>博士</option>' +
+            '</select></div>' +
+          '</div>' +
+          '<div class="form-row" style="margin-top:12px;">' +
+            '<div class="form-group"><label class="form-label">入学时间</label><input class="form-input" name="start_date" placeholder="YYYY-MM" value="' + escapeHtml(e.start_date || '') + '"></div>' +
+            '<div class="form-group"><label class="form-label">毕业时间</label><input class="form-input" name="end_date" placeholder="YYYY-MM 或 present" value="' + escapeHtml(e.end_date || '') + '"></div>' +
+          '</div>' +
+          '<div class="form-group" style="margin-top:12px;"><label class="form-label" style="display:flex;align-items:center;gap:6px;"><input type="checkbox" name="is_current"' + (e.is_current ? ' checked' : '') + '> 至今在读</label></div>' +
+        '</form>';
+        window.UI.showModal({
+          title: isEdit ? '编辑教育背景' : '添加教育背景',
+          content: html, confirmText: '保存', cancelText: '取消', showCancel: true, width: 500,
+          onConfirm: function () { submitEducation(isEdit, existing); }
+        });
+      }
+
+      function submitEducation(isEdit, existing) {
+        var form = document.getElementById('subForm');
+        if (!form) return;
+        if (!window.UI.validateForm(form)) return;
+        var btn = document.querySelector('.modal.show [data-action="confirm"]');
+        if (btn) { btn.disabled = true; btn.textContent = '保存中...'; }
+        var data = {};
+        ['school', 'major', 'degree', 'start_date', 'end_date'].forEach(function (k) {
+          if (form.elements[k].value !== '') data[k] = form.elements[k].value;
+        });
+        data.is_current = form.elements.is_current.checked ? 1 : 0;
+        var p = isEdit
+          ? window.API.candidates.updateEducation(candidateId, existing.id, data)
+          : window.API.candidates.createEducation(candidateId, data);
+        p.then(function (r) {
+          if (r && r.ok) { window.UI.showToast({ type: 'success', title: '已保存', message: '' }); loadDetail(); }
+          else { if (btn) { btn.disabled = false; btn.textContent = '保存'; } }
+        }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = '保存'; } });
+      }
+
+      function openContactModal(existing) {
+        var isEdit = !!existing;
+        var e = existing || {};
+        var html = '<form id="subForm" class="form">' +
+          '<div class="form-row">' +
+            '<div class="form-group"><label class="form-label">联系方式</label><select class="form-select" name="contact_type">' +
+              '<option value="phone"' + (e.contact_type === 'phone' ? ' selected' : '') + '>电话</option>' +
+              '<option value="wechat"' + (e.contact_type === 'wechat' ? ' selected' : '') + '>微信</option>' +
+              '<option value="email"' + (e.contact_type === 'email' ? ' selected' : '') + '>邮件</option>' +
+              '<option value="in_person"' + (e.contact_type === 'in_person' ? ' selected' : '') + '>面谈</option>' +
+              '<option value="other"' + (e.contact_type === 'other' ? ' selected' : '') + '>其他</option>' +
+            '</select></div>' +
+            '<div class="form-group"><label class="form-label">联系时间</label><input class="form-input" name="contact_at" placeholder="YYYY-MM-DD HH:mm" value="' + escapeHtml(e.contact_at || '') + '"></div>' +
+          '</div>' +
+          '<div class="form-group" style="margin-top:12px;"><label class="form-label">联系内容</label><textarea class="form-textarea" name="content" rows="3">' + escapeHtml(e.content || '') + '</textarea></div>' +
+          '<div class="form-group" style="margin-top:12px;"><label class="form-label">下次跟进时间</label><input class="form-input" name="next_follow_up_at" placeholder="YYYY-MM-DD" value="' + escapeHtml(e.next_follow_up_at || '') + '"></div>' +
+        '</form>';
+        window.UI.showModal({
+          title: isEdit ? '编辑联系记录' : '添加联系记录',
+          content: html, confirmText: '保存', cancelText: '取消', showCancel: true, width: 500,
+          onConfirm: function () { submitContact(isEdit, existing); }
+        });
+      }
+
+      function submitContact(isEdit, existing) {
+        var form = document.getElementById('subForm');
+        if (!form) return;
+        var btn = document.querySelector('.modal.show [data-action="confirm"]');
+        if (btn) { btn.disabled = true; btn.textContent = '保存中...'; }
+        var data = {};
+        ['contact_type', 'contact_at', 'content', 'next_follow_up_at'].forEach(function (k) {
+          if (form.elements[k].value !== '') data[k] = form.elements[k].value;
+        });
+        var p = isEdit
+          ? window.API.candidates.updateContact(candidateId, existing.id, data)
+          : window.API.candidates.createContact(candidateId, data);
+        p.then(function (r) {
+          if (r && r.ok) { window.UI.showToast({ type: 'success', title: '已保存', message: '' }); loadDetail(); }
+          else { if (btn) { btn.disabled = false; btn.textContent = '保存'; } }
+        }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = '保存'; } });
+      }
+
+      // ============================================================
+      // 推荐记录 modal
+      // ============================================================
+      function openRecModal(existing) {
+        var isEdit = !!existing;
+        var r = existing || {};
+        var html = '<form id="subForm" class="form">' +
+          '<div class="form-group"><label class="form-label">关联职位</label>' +
+            '<select class="form-select" name="job_id" id="recJobSelect"><option value="">加载中...</option></select>' +
+            '<div class="form-help" style="font-size:12px;color:var(--color-text-secondary);">如列表为空，请先到"职位管理"创建职位</div>' +
+          '</div>' +
+          '<div class="form-row" style="margin-top:12px;">' +
+            '<div class="form-group"><label class="form-label">客户公司名</label><input class="form-input" name="client_name" value="' + escapeHtml(r.client_name || '') + '"></div>' +
+            '<div class="form-group"><label class="form-label">推荐方式</label><select class="form-select" name="recommend_method">' +
+              '<option value="">不填</option>' +
+              '<option value="email"' + (r.recommend_method === 'email' ? ' selected' : '') + '>邮件</option>' +
+              '<option value="wechat"' + (r.recommend_method === 'wechat' ? ' selected' : '') + '>微信</option>' +
+              '<option value="platform"' + (r.recommend_method === 'platform' ? ' selected' : '') + '>平台</option>' +
+              '<option value="in_person"' + (r.recommend_method === 'in_person' ? ' selected' : '') + '>面谈</option>' +
+              '<option value="other"' + (r.recommend_method === 'other' ? ' selected' : '') + '>其他</option>' +
+            '</select></div>' +
+          '</div>' +
+          '<div class="form-group" style="margin-top:12px;"><label class="form-label">期望薪资</label><input class="form-input" name="expected_salary" placeholder="如 30-50k" value="' + escapeHtml(r.expected_salary || '') + '"></div>' +
+          '<div class="form-group" style="margin-top:12px;"><label class="form-label">备注</label><textarea class="form-textarea" name="notes" rows="3">' + escapeHtml(r.notes || '') + '</textarea></div>' +
+        '</form>';
+        window.UI.showModal({
+          title: isEdit ? '编辑推荐记录' : '推荐给职位',
+          content: html, confirmText: '保存', cancelText: '取消', showCancel: true, width: 560,
+          onConfirm: function () { submitRec(isEdit, existing); }
+        });
+        // 异步加载 job 列表
+        window.API.jobs.lookup().then(function (jr) {
+          var sel = document.getElementById('recJobSelect');
+          if (!sel || !jr || !jr.ok) return;
+          var opts = '<option value="">不选（手填职位信息）</option>';
+          jr.data.forEach(function (j) {
+            opts += '<option value="' + j.id + '"' + (r.job_id && Number(r.job_id) === j.id ? ' selected' : '') + '>' + escapeHtml(j.title) + (j.company ? ' · ' + escapeHtml(j.company) : '') + '</option>';
+          });
+          sel.innerHTML = opts;
+        });
+      }
+
+      function submitRec(isEdit, existing) {
+        var form = document.getElementById('subForm');
+        if (!form) return;
+        var btn = document.querySelector('.modal.show [data-action="confirm"]');
+        if (btn) { btn.disabled = true; btn.textContent = '保存中...'; }
+        var data = {
+          candidate_id: candidateId,
+          client_name: form.elements.client_name.value || null,
+          recommend_method: form.elements.recommend_method.value || null,
+          expected_salary: form.elements.expected_salary.value || null,
+          notes: form.elements.notes.value || null
+        };
+        if (form.elements.job_id.value) {
+          data.job_id = parseInt(form.elements.job_id.value);
+          var sel = form.elements.job_id;
+          var opt = sel.options[sel.selectedIndex];
+          // job_title 由后端从 jobs 表自动填充
+        } else {
+          // 无 job_id 时，从选中的"手填职位"占位 option 中不取 title，title 为空
+        }
+        var p = isEdit
+          ? window.API.recommendations.update(existing.id, data)
+          : window.API.recommendations.create(data);
+        p.then(function (r) {
+          if (r && r.ok) { window.UI.showToast({ type: 'success', title: '已保存', message: '' }); loadDetail(); }
+          else { if (btn) { btn.disabled = false; btn.textContent = '保存'; } }
+        }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = '保存'; } });
+      }
+
+      function openRecStatusModal(rec) {
+        // 从后端读 rec 详情以拿 history
+        window.API.recommendations.get(rec.id).then(function (r) {
+          if (!r || !r.ok) return;
+          var data = r.data;
+          var nextStatuses = {
+            'recommended': ['pending_feedback', 'interviewing', 'rejected', 'withdrawn'],
+            'pending_feedback': ['interviewing', 'recommended', 'rejected', 'withdrawn'],
+            'interviewing': ['offered', 'rejected', 'withdrawn'],
+            'offered': ['hired', 'rejected', 'withdrawn'],
+            'hired': [],
+            'rejected': [],
+            'withdrawn': ['recommended']
+          };
+          var labels = { recommended: '已推荐', pending_feedback: '待反馈', interviewing: '面试中',
+            offered: '已发 offer', hired: '已入职', rejected: '已拒绝', withdrawn: '已撤回' };
+          var allowed = nextStatuses[data.status] || [];
+          if (!allowed.length) {
+            window.UI.showToast({ type: 'info', title: '终态', message: '当前状态已是终态，无法再变更' });
+            return;
+          }
+          var opts = allowed.map(function (s) { return '<option value="' + s + '">' + labels[s] + '</option>'; }).join('');
+          var html = '<form id="subForm" class="form">' +
+            '<div class="form-group"><label class="form-label">当前状态</label>' +
+              '<div><span class="status-pill ' + escapeHtml(data.status) + '">' + (labels[data.status] || data.status) + '</span></div>' +
+            '</div>' +
+            '<div class="form-group" style="margin-top:12px;"><label class="form-label required">目标状态</label>' +
+              '<select class="form-select" name="to_status" required>' + opts + '</select>' +
+            '</div>' +
+            '<div class="form-group" style="margin-top:12px;"><label class="form-label">变更说明</label>' +
+              '<textarea class="form-textarea" name="note" rows="3" placeholder="如：客户确认面试时间"></textarea>' +
+            '</div>' +
+          '</form>';
+          window.UI.showModal({
+            title: '变更推荐状态',
+            content: html, confirmText: '变更', cancelText: '取消', showCancel: true, width: 480,
+            onConfirm: function () { submitRecStatus(data); }
+          });
+        });
+      }
+
+      function submitRecStatus(rec) {
+        var form = document.getElementById('subForm');
+        if (!form) return;
+        var btn = document.querySelector('.modal.show [data-action="confirm"]');
+        if (btn) { btn.disabled = true; btn.textContent = '变更中...'; }
+        var data = {
+          to_status: form.elements.to_status.value,
+          note: form.elements.note.value || ''
+        };
+        window.API.recommendations.changeStatus(rec.id, data).then(function (r) {
+          if (r && r.ok) { window.UI.showToast({ type: 'success', title: '状态已变更', message: '' }); loadDetail(); }
+          else { if (btn) { btn.disabled = false; btn.textContent = '变更'; } }
+        }).catch(function () { if (btn) { btn.disabled = false; btn.textContent = '变更'; } });
+      }
+
+      function bindSubListEvents() {
+        var expList = document.getElementById('experienceList');
+        expList.addEventListener('click', function (e) {
+          var item = e.target.closest && e.target.closest('.sub-item');
+          if (!item) return;
+          var id = parseInt(item.getAttribute('data-id'));
+          var act = e.target.getAttribute('data-act');
+          if (act === 'edit') {
+            var data = (current.experiences || []).find(function (x) { return x.id === id; });
+            if (data) openExperienceModal(data);
+          } else if (act === 'delete') {
+            window.UI.showConfirm({ title: '确认删除', content: '删除此工作经历？', type: 'warning', onConfirm: function () {
+              window.API.candidates.removeExperience(candidateId, id).then(function (r) {
+                if (r && r.ok) loadDetail();
+              });
+            }});
+          }
+        });
+        var eduList = document.getElementById('educationList');
+        eduList.addEventListener('click', function (e) {
+          var item = e.target.closest && e.target.closest('.sub-item');
+          if (!item) return;
+          var id = parseInt(item.getAttribute('data-id'));
+          var act = e.target.getAttribute('data-act');
+          if (act === 'edit') {
+            var data = (current.educations || []).find(function (x) { return x.id === id; });
+            if (data) openEducationModal(data);
+          } else if (act === 'delete') {
+            window.UI.showConfirm({ title: '确认删除', content: '删除此教育背景？', type: 'warning', onConfirm: function () {
+              window.API.candidates.removeEducation(candidateId, id).then(function (r) {
+                if (r && r.ok) loadDetail();
+              });
+            }});
+          }
+        });
+        var contactList = document.getElementById('contactList');
+        contactList.addEventListener('click', function (e) {
+          var item = e.target.closest && e.target.closest('.sub-item');
+          if (!item) return;
+          var id = parseInt(item.getAttribute('data-id'));
+          var act = e.target.getAttribute('data-act');
+          if (act === 'edit') {
+            var data = (current.contacts || []).find(function (x) { return x.id === id; });
+            if (data) openContactModal(data);
+          } else if (act === 'delete') {
+            window.UI.showConfirm({ title: '确认删除', content: '删除此联系记录？', type: 'warning', onConfirm: function () {
+              window.API.candidates.removeContact(candidateId, id).then(function (r) {
+                if (r && r.ok) loadDetail();
+              });
+            }});
+          }
+        });
+
+        var recList = document.getElementById('recommendationList');
+        recList.addEventListener('click', function (e) {
+          var item = e.target.closest && e.target.closest('.sub-item');
+          if (!item) return;
+          var id = parseInt(item.getAttribute('data-id'));
+          var act = e.target.getAttribute('data-act');
+          if (act === 'change-status') {
+            var data = (current.recommendations || []).find(function (x) { return x.id === id; });
+            if (data) openRecStatusModal(data);
+          } else if (act === 'edit') {
+            var data2 = (current.recommendations || []).find(function (x) { return x.id === id; });
+            if (data2) openRecModal(data2);
+          } else if (act === 'delete') {
+            window.UI.showConfirm({ title: '确认删除', content: '删除此推荐记录？相关状态历史会保留。', type: 'warning', onConfirm: function () {
+              window.API.recommendations.remove(id).then(function (r) {
+                if (r && r.ok) loadDetail();
+              });
+            }});
+          }
+        });
+      }
+
+      function loadDetail() {
+        window.API.candidates.get(candidateId).then(function (r) {
+          if (!r || !r.ok) {
+            window.UI.showToast({ type: 'error', title: '加载失败', message: (r && r.error && r.error.message) || '候选人不存在' });
+            setTimeout(function () { window.Router.navigate('candidate-pool.html'); }, 800);
+            return;
+          }
+          current = r.data;
+          document.getElementById('loadingHint').style.display = 'none';
+          document.getElementById('detailContainer').style.display = '';
+          renderHeader(current);
+          renderBasic(current);
+          renderExperiences(current.experiences || []);
+          renderEducations(current.educations || []);
+          renderContacts(current.contacts || []);
+          renderRecommendations(current.recommendations || []);
+          renderTimeline(current);
+        });
+      }
+
+      function bindEvents() {
+        on('editBtn', 'click', function () {
+          if (!current) return;
+          window.CandidateForm.open({
+            mode: 'edit', candidate: current,
+            onSaved: function () { loadDetail(); }
+          });
+        });
+        on('deleteBtn', 'click', function () {
+          if (!current) return;
+          window.UI.showConfirm({
+            title: '确认删除',
+            content: '确定要删除 ' + current.name + ' 吗？此操作不可恢复。',
+            type: 'warning',
+            confirmText: '删除',
+            onConfirm: function () {
+              window.API.candidates.remove(candidateId).then(function (r) {
+                if (r && r.ok) {
+                  window.UI.showToast({ type: 'success', title: '已删除', message: '' });
+                  setTimeout(function () { window.Router.navigate('candidate-pool.html'); }, 600);
+                }
+              });
+            }
+          });
+        });
+
+        // 添加按钮
+        document.querySelectorAll('[data-action]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var act = btn.getAttribute('data-action');
+            if (act === 'add-experience') openExperienceModal(null);
+            else if (act === 'add-education') openEducationModal(null);
+            else if (act === 'add-contact') openContactModal(null);
+
+        // ===== P1-6 修复：3 个"加载更多"按钮 =====
+        on('expMoreBtn', 'click', function () { loadMoreSub('exp', renderExperiencesPage); });
+        on('eduMoreBtn', 'click', function () { loadMoreSub('edu', renderEducationsPage); });
+        on('contactMoreBtn', 'click', function () { loadMoreSub('contact', renderContactsPage); });
+            else if (act === 'add-recommendation') openRecModal(null);
+          });
+        });
+
+        bindSubListEvents();
+      }
+
+      function init() {
+        candidateId = parseInt(window.Router.getParam('id'));
+        if (!candidateId) {
+          window.Router.navigate('candidate-pool.html');
+          return;
+        }
+        bindEvents();
+        loadDetail();
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+  <script src="../shared/shared.js"></script>
+  <script src="../shared/layout.js"></script>
+</body>
+</html>

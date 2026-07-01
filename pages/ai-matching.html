@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 智能匹配</title>
+  <link rel="stylesheet" href="../shared/shared.css">
+  <script src="../shared/auth.js"></script>
+  <script src="../shared/loading.js"></script>
+  <script src="../shared/router.js"></script>
+  <script src="../shared/api.js"></script>
+  <style id="pageStyle">
+    .match-toolbar { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .match-toolbar .form-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+    .match-toolbar .form-group { flex: 1; min-width: 200px; }
+    .weight-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 24px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-border-light); }
+    .weight-item { display: flex; flex-direction: column; gap: 4px; }
+    .weight-item label { font-size: 12px; color: var(--color-text-secondary); display: flex; justify-content: space-between; }
+    .match-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+    .match-card { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; padding: 16px; }
+    .match-card .name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .match-card .position { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 8px; }
+    .match-card .score { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .match-card .score-num { font-size: 24px; font-weight: 600; color: var(--color-primary); }
+    .match-card .score-bar { flex: 1; height: 6px; background: var(--color-bg-page-secondary, #f3f4f6); border-radius: 3px; overflow: hidden; }
+    .match-card .score-bar-fill { height: 100%; background: var(--color-primary); }
+    .match-card .reasons { font-size: 12px; color: var(--color-text-secondary); line-height: 1.6; }
+    .match-card .actions { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--color-border-light); }
+    .match-card .actions button { flex: 1; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    .match-card .actions .btn-recommend { background: var(--color-primary); color: #fff; border: none; }
+    .match-card .actions .btn-view { background: none; border: 1px solid var(--color-border); color: var(--color-text-secondary); }
+  </style>
+</head>
+<body>
+  <div id="pageContent">
+    <div class="match-toolbar">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">选择职位</label>
+          <select class="form-select" id="jobSelect"><option value="">加载中...</option></select>
+        </div>
+        <div class="form-group" style="flex: 0 0 auto;">
+          <button class="btn btn-primary" id="matchBtn">开始匹配</button>
+        </div>
+      </div>
+
+      <div class="weight-grid">
+        <div class="weight-item"><label>行业 <span id="wIndustryVal">25%</span></label><input type="range" min="0" max="100" value="25" id="wIndustry"></div>
+        <div class="weight-item"><label>职位 <span id="wPositionVal">25%</span></label><input type="range" min="0" max="100" value="25" id="wPosition"></div>
+        <div class="weight-item"><label>地点 <span id="wCityVal">15%</span></label><input type="range" min="0" max="100" value="15" id="wCity"></div>
+        <div class="weight-item"><label>薪资 <span id="wSalaryVal">15%</span></label><input type="range" min="0" max="100" value="15" id="wSalary"></div>
+        <div class="weight-item"><label>经验 <span id="wExperienceVal">10%</span></label><input type="range" min="0" max="100" value="10" id="wExperience"></div>
+        <div class="weight-item"><label>学历 <span id="wEducationVal">10%</span></label><input type="range" min="0" max="100" value="10" id="wEducation"></div>
+      </div>
+    </div>
+
+    <div id="resultHint" style="padding:40px;text-align:center;color:var(--color-text-secondary);">选择职位后点击"开始匹配"</div>
+    <div class="match-grid" id="matchGrid" style="display:none;"></div>
+  </div>
+
+  <script id="pageScript">
+    (function () {
+      var currentJob = null;
+      var allCandidates = [];
+
+      function on(id, evt, handler) { var el = document.getElementById(id); if (el) el.addEventListener(evt, handler); }
+      function escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+      function bindWeights() {
+        ['wIndustry', 'wPosition', 'wCity', 'wSalary', 'wExperience', 'wEducation'].forEach(function (id) {
+          var el = document.getElementById(id);
+          var label = document.getElementById(id + 'Val');
+          if (el && label) el.addEventListener('input', function () { label.textContent = el.value + '%'; });
+        });
+      }
+
+      function getWeights() {
+        return {
+          industry: parseInt(document.getElementById('wIndustry').value) || 0,
+          position: parseInt(document.getElementById('wPosition').value) || 0,
+          city: parseInt(document.getElementById('wCity').value) || 0,
+          salary: parseInt(document.getElementById('wSalary').value) || 0,
+          experience: parseInt(document.getElementById('wExperience').value) || 0,
+          education: parseInt(document.getElementById('wEducation').value) || 0
+        };
+      }
+
+      function loadJobs() {
+        window.API.jobs.list({ pageSize: 100 }).then(function (r) {
+          if (!r || !r.ok) return;
+          var sel = document.getElementById('jobSelect');
+          sel.innerHTML = '<option value="">请选择职位...</option>';
+          (r.data || []).forEach(function (j) {
+            var opt = document.createElement('option');
+            opt.value = j.id;
+            opt.textContent = j.title + (j.company ? ' · ' + j.company : '') + (j.city ? ' · ' + j.city : '');
+            sel.appendChild(opt);
+          });
+        });
+      }
+
+      function loadCandidates() {
+        return window.API.candidates.list({ pageSize: 100 }).then(function (r) {
+          if (r && r.ok) allCandidates = r.data || [];
+        });
+      }
+
+      function scoreCandidate(c, job, w) {
+        var s = {};
+        s.industry = (c.expected_industry && job.industry && c.expected_industry === job.industry) ? 100 :
+                      (c.expected_industry && job.industry && c.expected_industry.indexOf(job.industry) !== -1) ? 80 : 0;
+        if (c.expected_position && job.title) {
+          var p1 = c.expected_position.toLowerCase();
+          var p2 = job.title.toLowerCase();
+          if (p1 === p2) s.position = 100;
+          else if (p1.indexOf(p2) !== -1 || p2.indexOf(p1) !== -1) s.position = 70;
+          else {
+            var kw1 = p1.split(/[\s,，/、]+/).filter(Boolean);
+            var kw2 = p2.split(/[\s,，/、]+/).filter(Boolean);
+            var overlap = kw1.filter(function (k) { return kw2.indexOf(k) !== -1; }).length;
+            s.position = Math.min(overlap * 25, 60);
+          }
+        } else s.position = 0;
+        s.city = (c.current_city && job.city && c.current_city === job.city) ? 100 :
+                 (c.current_city && job.city && (c.current_city.indexOf(job.city) !== -1 || job.city.indexOf(c.current_city) !== -1)) ? 60 : 0;
+        if (c.expected_salary_min && c.expected_salary_max && job.salary_min && job.salary_max) {
+          var oMin = Math.max(c.expected_salary_min, job.salary_min);
+          var oMax = Math.min(c.expected_salary_max, job.salary_max);
+          if (oMax >= oMin) s.salary = 100;
+          else {
+            var gap = oMin - oMax;
+            var range = Math.max(job.salary_max - job.salary_min, 1);
+            s.salary = gap / range < 0.3 ? 50 : 0;
+          }
+        } else s.salary = 0;
+        if (c.years_of_experience != null) {
+          var yMin = job.experience_min || 0;
+          var yMax = job.experience_max || 99;
+          if (c.years_of_experience >= yMin && c.years_of_experience <= yMax) s.experience = 100;
+          else if (c.years_of_experience >= yMin - 1 && c.years_of_experience <= yMax + 1) s.experience = 60;
+          else s.experience = Math.max(0, 100 - Math.abs(c.years_of_experience - (yMin + yMax) / 2) * 10);
+        } else s.experience = 0;
+        var eduOrder = { highschool: 1, bachelor: 2, master: 3, phd: 4 };
+        var cE = eduOrder[c.education_level] || 0;
+        var jE = eduOrder[job.education_level] || 0;
+        s.education = (jE === 0) ? 100 : (cE >= jE ? 100 : 30);
+        var total = (s.industry * w.industry + s.position * w.position + s.city * w.city + s.salary * w.salary + s.experience * w.experience + s.education * w.education) / 100;
+        return { total: Math.round(total), parts: s };
+      }
+
+      function doMatch() {
+        var jobId = parseInt(document.getElementById('jobSelect').value);
+        if (!jobId) { window.UI.showToast({ type: 'warning', title: '提示', message: '请先选择职位' }); return; }
+        window.API.jobs.get(jobId).then(function (r) {
+          if (!r || !r.ok) return;
+          currentJob = r.data;
+          if (!allCandidates.length) { window.UI.showToast({ type: 'info', title: '提示', message: '暂无候选人可匹配' }); return; }
+          var w = getWeights();
+          var total_w = w.industry + w.position + w.city + w.salary + w.experience + w.education;
+          if (total_w === 0) { window.UI.showToast({ type: 'warning', title: '提示', message: '请至少设置一项权重' }); return; }
+          var results = allCandidates.map(function (c) {
+            return Object.assign({ c: c }, scoreCandidate(c, currentJob, w));
+          }).filter(function (r) { return r.total > 0; });
+          results.sort(function (a, b) { return b.total - a.total; });
+          renderResults(results.slice(0, 12));
+        });
+      }
+
+      function renderResults(results) {
+        var hint = document.getElementById('resultHint');
+        var grid = document.getElementById('matchGrid');
+        if (!results.length) {
+          hint.textContent = '未找到匹配的候选人。试试调整权重或选择其他职位。';
+          hint.style.display = '';
+          grid.style.display = 'none';
+          return;
+        }
+        hint.style.display = 'none';
+        grid.style.display = '';
+        grid.innerHTML = results.map(function (r) {
+          var c = r.c;
+          return '<div class="match-card" data-cid="' + c.id + '">' +
+            '<div class="name">' + escapeHtml(c.name) + '</div>' +
+            '<div class="position">' + escapeHtml(c.current_position || '-') + ' · ' + escapeHtml(c.current_company || '-') + '</div>' +
+            '<div class="score"><div class="score-num">' + r.total + '</div><div class="score-bar"><div class="score-bar-fill" style="width:' + r.total + '%;"></div></div></div>' +
+            '<div class="reasons">' +
+              reasonRow('行业', r.parts.industry) +
+              reasonRow('职位', r.parts.position) +
+              reasonRow('地点', r.parts.city) +
+              reasonRow('薪资', r.parts.salary) +
+              reasonRow('经验', r.parts.experience) +
+              reasonRow('学历', r.parts.education) +
+            '</div>' +
+            '<div class="actions">' +
+              '<button class="btn-recommend" data-act="recommend">推荐给该职位</button>' +
+              '<button class="btn-view" data-act="view">查看详情</button>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      }
+
+      function reasonRow(label, score) {
+        if (score >= 80) return '<div class="reason">✓ ' + label + ' 高匹配 (' + score + ')</div>';
+        if (score >= 50) return '<div class="reason">◐ ' + label + ' 部分匹配 (' + score + ')</div>';
+        return '<div class="reason">○ ' + label + ' 弱匹配 (' + score + ')</div>';
+      }
+
+      function bindResults() {
+        var grid = document.getElementById('matchGrid');
+        grid.addEventListener('click', function (e) {
+          var card = e.target.closest('.match-card');
+          if (!card) return;
+          var cid = parseInt(card.getAttribute('data-cid'));
+          var act = e.target.getAttribute('data-act');
+          if (act === 'view') { window.Router.navigate('candidate-detail.html?id=' + cid); return; }
+          if (act === 'recommend') {
+            if (!currentJob) return;
+            window.API.recommendations.create({
+              candidate_id: cid,
+              job_id: currentJob.id,
+              recommend_method: 'platform',
+              notes: 'AI 匹配分数 ' + (card.querySelector('.score-num') ? card.querySelector('.score-num').textContent : '')
+            }).then(function (r) {
+              if (r && r.ok) { window.UI.showToast({ type: 'success', title: '已推荐', message: '推荐记录已创建' }); }
+              else { window.UI.showToast({ type: 'error', title: '失败', message: (r && r.error && r.error.message) || '推荐失败' }); }
+            });
+          }
+        });
+      }
+
+      function init() {
+        bindWeights();
+        on('matchBtn', 'click', doMatch);
+        bindResults();
+        loadJobs();
+        loadCandidates();
+      }
+
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+      else init();
+    })();
+  </script>
+  <script src="../shared/shared.js"></script>
+  <script src="../shared/layout.js"></script>
+</body>
+</html>

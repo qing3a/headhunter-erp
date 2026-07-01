@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新建职位 - TalentFlow AI</title>
+  <link rel="stylesheet" href="../shared/shared.css">
+  <script src="../shared/auth.js"></script>
+  <script src="../shared/loading.js"></script>
+  <script src="../shared/router.js"></script>
+  <script src="../shared/api.js"></script>
+  <style id="pageStyle">
+    .job-form-container { max-width: 800px; margin: 0 auto; }
+    .form-section { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; padding: 24px; margin-bottom: 16px; }
+    .form-section h3 { margin: 0 0 16px 0; font-size: 15px; font-weight: 600; }
+    .form-section.required-label .form-label::after { content: ' *'; color: #dc2626; }
+    .form-footer { display: flex; gap: 12px; justify-content: flex-end; padding: 16px 0; }
+  </style>
+</head>
+<body>
+  <div id="pageContent">
+    <div class="job-form-container">
+      <h2 style="margin: 0 0 20px 0; font-size: 20px;">新建职位</h2>
+
+      <form id="jobForm">
+        <!-- 基本信息 -->
+        <div class="form-section required-label">
+          <h3>基本信息</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">职位名称</label>
+              <input class="form-input" name="title" required placeholder="如 高级前端工程师">
+            </div>
+            <div class="form-group">
+              <label class="form-label">公司名称</label>
+              <input class="form-input" name="company" placeholder="如 字节跳动">
+            </div>
+          </div>
+          <div class="form-row" style="margin-top:12px;">
+            <div class="form-group">
+              <label class="form-label">部门</label>
+              <input class="form-input" name="department" placeholder="如 产品部">
+            </div>
+            <div class="form-group">
+              <label class="form-label">工作城市</label>
+              <input class="form-input" name="city" placeholder="如 北京">
+            </div>
+            <div class="form-group">
+              <label class="form-label">行业</label>
+              <input class="form-input" name="industry" placeholder="如 互联网">
+            </div>
+          </div>
+        </div>
+
+        <!-- 薪资 & 经验 -->
+        <div class="form-section required-label">
+          <h3>薪资与经验</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">薪资下限（k）</label>
+              <input class="form-input" name="salary_min" type="number" min="0" placeholder="如 30">
+            </div>
+            <div class="form-group">
+              <label class="form-label">薪资上限（k）</label>
+              <input class="form-input" name="salary_max" type="number" min="0" placeholder="如 60">
+            </div>
+            <div class="form-group">
+              <label class="form-label">经验下限（年）</label>
+              <input class="form-input" name="experience_min" type="number" min="0" placeholder="如 3">
+            </div>
+            <div class="form-group">
+              <label class="form-label">经验上限（年）</label>
+              <input class="form-input" name="experience_max" type="number" min="0" placeholder="如 8">
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label">学历要求</label>
+            <select class="form-select" name="education_level">
+              <option value="">不限制</option>
+              <option value="highschool">高中及以上</option>
+              <option value="bachelor">本科及以上</option>
+              <option value="master">硕士及以上</option>
+              <option value="phd">博士及以上</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- JD -->
+        <div class="form-section">
+          <h3>职位描述</h3>
+          <textarea class="form-textarea" name="description" rows="8" placeholder="详细描述该职位的职责、要求、福利等..."></textarea>
+        </div>
+
+        <!-- 操作 -->
+        <div class="form-footer">
+          <button type="button" class="btn btn-secondary" id="cancelBtn">取消</button>
+          <button type="submit" class="btn btn-primary" id="submitBtn">发布职位</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script id="pageScript">
+    (function () {
+      function on(id, evt, handler) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener(evt, handler);
+      }
+
+      function collectData() {
+        var form = document.getElementById('jobForm');
+        var data = { status: 'open' };
+        ['title', 'company', 'department', 'city', 'industry', 'description', 'education_level'].forEach(function (k) {
+          if (form.elements[k] && form.elements[k].value) data[k] = form.elements[k].value.trim();
+        });
+        ['salary_min', 'salary_max', 'experience_min', 'experience_max'].forEach(function (k) {
+          var v = form.elements[k].value;
+          if (v !== '') data[k] = parseInt(v) || null;
+        });
+        return data;
+      }
+
+      function bind() {
+        var form = document.getElementById('jobForm');
+        var submitBtn = document.getElementById('submitBtn');
+
+        on('cancelBtn', 'click', function () {
+          window.Router.navigate('job-management.html');
+        });
+
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          if (!form.elements.title.value.trim()) {
+            window.UI.showToast({ type: 'warning', title: '提示', message: '请填写职位名称' });
+            return;
+          }
+          var data = collectData();
+          submitBtn.disabled = true;
+          submitBtn.textContent = '发布中...';
+          window.API.jobs.create(data).then(function (r) {
+            if (r && r.ok) {
+              window.UI.showToast({ type: 'success', title: '已发布', message: '职位已创建' });
+              setTimeout(function () { window.Router.navigate('job-management.html'); }, 600);
+            } else {
+              window.UI.showToast({ type: 'error', title: '失败', message: (r && r.error && r.error.message) || '创建失败' });
+              submitBtn.disabled = false;
+              submitBtn.textContent = '发布职位';
+            }
+          }).catch(function () {
+            submitBtn.disabled = false;
+            submitBtn.textContent = '发布职位';
+          });
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bind);
+      } else {
+        bind();
+      }
+    })();
+  </script>
+  <script src="../shared/shared.js"></script>
+  <script src="../shared/layout.js"></script>
+</body>
+</html>

@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>候选人库</title>
+  <link rel="stylesheet" href="../shared/shared.css">
+  <script src="../shared/auth.js"></script>
+  <script src="../shared/menu-config.js"></script>
+  <script src="../shared/loading.js"></script>
+  <script src="../shared/router.js"></script>
+  <script src="../shared/api.js"></script>
+  <script src="../shared/candidate-form.js"></script>
+  <style id="pageStyle">
+    .page-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .page-toolbar .search-box { flex: 1; min-width: 240px; max-width: 360px; position: relative; }
+    .page-toolbar .search-box input { width: 100%; padding: 8px 12px 8px 36px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 14px; }
+    .page-toolbar .search-box::before { content: ''; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E") center/contain no-repeat; pointer-events: none; }
+    .page-toolbar .btn { white-space: nowrap; }
+
+    .filter-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; padding: 12px 16px; background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; }
+    .filter-bar .filter-label { font-size: 13px; color: var(--color-text-secondary, #6b7280); }
+    .filter-bar select, .filter-bar input { padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; min-width: 120px; }
+
+    .table-card { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; }
+    .table-card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--color-border-light); }
+    .table-card-header h3 { margin: 0; font-size: 15px; font-weight: 600; }
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th, .data-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--color-border-light); font-size: 14px; }
+    .data-table th { background: var(--color-bg-page-secondary, #f9fafb); font-weight: 600; color: var(--color-text-secondary, #6b7280); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .data-table tbody tr { cursor: pointer; transition: background 0.15s; }
+    .data-table tbody tr:hover { background: var(--color-bg-page-secondary, #f9fafb); }
+    .data-table .col-name { font-weight: 500; color: var(--color-primary); }
+    .data-table .col-actions { text-align: right; white-space: nowrap; }
+    .data-table .col-actions .btn-link { color: var(--color-text-secondary); cursor: pointer; font-size: 13px; padding: 4px 8px; border: none; background: none; }
+    .data-table .col-actions .btn-link:hover { color: var(--color-primary); }
+    .data-table .col-actions .btn-link.danger:hover { color: #dc2626; }
+
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; background: var(--color-primary-lightest, #CCFBF1); color: var(--color-primary-dark, #0F766E); margin-right: 4px; }
+    .status-pill { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+    .status-pill.active { background: #d1fae5; color: #065f46; }
+    .status-pill.passive { background: #fef3c7; color: #92400e; }
+    .status-pill.placed { background: #dbeafe; color: #1e40af; }
+    .status-pill.unavailable { background: #f3f4f6; color: #4b5563; }
+    .status-pill.blacklist { background: #fee2e2; color: #991b1b; }
+
+    .rating { color: #f59e0b; font-size: 13px; }
+    .rating-empty { color: #d1d5db; }
+
+    .pagination { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--color-border-light); }
+    .pagination-info { font-size: 13px; color: var(--color-text-secondary); }
+    .pagination-pages { display: flex; gap: 4px; }
+    .pagination-pages button { padding: 4px 10px; border: 1px solid var(--color-border); background: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .pagination-pages button:hover:not(:disabled) { background: var(--color-bg-page-secondary); }
+    .pagination-pages button.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+    .pagination-pages button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* 批量操作浮动条 */
+    .batch-bar { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #1f2937; color: #fff; border-radius: 10px; padding: 10px 16px; display: none; align-items: center; gap: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 100; }
+    .batch-bar.show { display: flex; }
+    .batch-bar .count { font-size: 13px; padding: 0 8px; }
+    .batch-bar .batch-btn { background: var(--color-primary); color: #fff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .batch-bar .batch-btn.secondary { background: rgba(255,255,255,0.1); }
+    .batch-bar .batch-btn.danger { background: #dc2626; }
+    .batch-bar .batch-btn:hover { opacity: 0.9; }
+
+    .empty-state { padding: 60px 20px; text-align: center; color: var(--color-text-secondary); }
+    .empty-state-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.4; }
+    .empty-state-title { font-size: 16px; margin-bottom: 6px; color: var(--color-text-primary); }
+    .empty-state-desc { font-size: 13px; }
+
+    .candidate-form-wrapper fieldset { border: 1px solid var(--color-border-light); border-radius: 8px; padding: 16px; margin: 0 0 16px 0; }
+    .candidate-form-wrapper legend { padding: 0 8px; font-size: 13px; font-weight: 600; color: var(--color-text-secondary); }
+    .candidate-form-wrapper .form-row { display: flex; gap: 12px; margin-bottom: 0; }
+    .candidate-form-wrapper .form-row .form-group { flex: 1; }
+  </style>
+</head>
+<body>
+  <div id="pageContent">
+    <div class="page-toolbar">
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="搜索姓名 / 邮箱 / 手机 / 公司">
+      </div>
+      <button id="newBtn" class="btn btn-primary">+ 新建候选人</button>
+    </div>
+
+    <div class="filter-bar">
+      <span class="filter-label">状态：</span>
+      <select id="statusFilter">
+        <option value="">全部</option>
+        <option value="active">活跃求职</option>
+        <option value="passive">被动考虑</option>
+        <option value="placed">已入职</option>
+        <option value="unavailable">暂不考虑</option>
+        <option value="blacklist">黑名单</option>
+      </select>
+      <span class="filter-label">城市：</span>
+      <select id="cityFilter">
+        <option value="">全部</option>
+      </select>
+      <span class="filter-label">学历：</span>
+      <select id="educationFilter">
+        <option value="">全部</option>
+        <option value="bachelor">本科</option>
+        <option value="master">硕士</option>
+        <option value="phd">博士</option>
+        <option value="highschool">高中</option>
+      </select>
+      <span class="filter-label">行业：</span>
+      <input id="industryFilter" class="form-input" style="width:120px;padding:4px 8px;font-size:13px;" placeholder="如 互联网">
+      <span class="filter-label">薪资(k)：</span>
+      <input id="salaryMinFilter" type="number" min="0" style="width:70px;padding:4px 8px;font-size:13px;" placeholder="下限">
+      <span style="color:var(--color-text-secondary);">-</span>
+      <input id="salaryMaxFilter" type="number" min="0" style="width:70px;padding:4px 8px;font-size:13px;" placeholder="上限">
+      <span class="filter-label">推荐：</span>
+      <select id="hasRecFilter">
+        <option value="">全部</option>
+        <option value="true">已推荐</option>
+        <option value="false">未推荐</option>
+      </select>
+      <span class="filter-label">排序：</span>
+      <select id="sortFilter">
+        <option value="">最近更新</option>
+        <option value="created_at_desc">创建时间</option>
+        <option value="salary_desc">薪资降序</option>
+        <option value="years_desc">工作年限</option>
+      </select>
+      <button id="resetFilterBtn" class="btn-link" style="margin-left:auto;background:none;border:none;color:var(--color-text-secondary);cursor:pointer;font-size:13px;">重置</button>
+    </div>
+
+    <div class="view-bar" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <span class="filter-label" style="font-size:13px;color:var(--color-text-secondary);">视图：</span>
+      <select id="viewSelect" style="padding:4px 8px;font-size:13px;border:1px solid var(--color-border);border-radius:6px;min-width:140px;">
+        <option value="">选择已保存视图...</option>
+      </select>
+      <button id="saveViewBtn" class="btn-link" style="background:none;border:none;color:var(--color-primary);cursor:pointer;font-size:13px;">💾 保存当前筛选为视图</button>
+      <button id="deleteViewBtn" class="btn-link" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:13px;display:none;">删除视图</button>
+    </div>
+
+    <div class="table-card">
+      <div class="table-card-header">
+        <h3>候选人列表 <span id="totalCount" style="color:var(--color-text-secondary);font-weight:normal;font-size:13px;margin-left:8px;"></span></h3>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width:32px;"><input type="checkbox" id="selectAllCheck"></th>
+            <th>姓名</th>
+            <th>当前职位</th>
+            <th>当前公司</th>
+            <th>年限</th>
+            <th>城市</th>
+            <th>状态</th>
+            <th>评分</th>
+            <th>标签</th>
+            <th>更新时间</th>
+            <th class="col-actions">操作</th>
+          </tr>
+        </thead>
+        <tbody id="candidateTbody"></tbody>
+      </table>
+      <div id="pagination" class="pagination"></div>
+    </div>
+
+    <!-- 批量操作浮动条 -->
+    <div id="batchBar" class="batch-bar">
+      <span class="count">已选 <span id="batchCount">0</span> 人</span>
+      <!-- ===== P2-D3 修复：全选所有页按钮 ===== -->
+      <button class="batch-btn secondary" id="selectAllPagesBtn" style="display:none;">全选所有 <span id="selectAllPagesTotal">0</span> 人</button>
+      <button class="batch-btn" data-batch="tag">批量打标签</button>
+      <button class="batch-btn secondary" data-batch="status">批量改状态</button>
+      <button class="batch-btn danger" data-batch="delete">批量删除</button>
+      <button class="batch-btn secondary" data-batch="cancel">取消</button>
+    </div>
+  </div>
+
+  <script id="pageScript">
+    (function () {
+      var state = {
+        page: 1, pageSize: 20,
+        keyword: '', status: '', city: '',
+        education: '', industry: '',
+        salaryMin: '', salaryMax: '',
+        hasRec: '', sort: '',
+        total: 0,
+        selectAllPages: false  // ===== P2-D3 修复：全选所有页标志 =====
+      };
+      var debounceTimer;
+      var VIEWS_KEY = 'erp_candidate_views';
+
+      function on(id, evt, handler) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener(evt, handler);
+      }
+
+      function escapeHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+
+      function statusLabel(s) {
+        return { active: '活跃求职', passive: '被动考虑', placed: '已入职',
+                 unavailable: '暂不考虑', blacklist: '黑名单' }[s] || s || '-';
+      }
+
+      function renderRating(r) {
+        var n = parseInt(r) || 0;
+        if (n === 0) return '<span class="rating-empty">--</span>';
+        var s = '';
+        for (var i = 1; i <= 5; i++) s += i <= n ? '★' : '☆';
+        return '<span class="rating">' + s + '</span>';
+      }
+
+      function renderTags(tags) {
+        if (!tags || !tags.length) return '<span style="color:#9ca3af;">--</span>';
+        return tags.slice(0, 3).map(function (t) { return '<span class="tag">' + escapeHtml(t) + '</span>'; }).join('') +
+          (tags.length > 3 ? '<span class="tag">+' + (tags.length - 3) + '</span>' : '');
+      }
+
+      function renderRow(c) {
+        var tr = document.createElement('tr');
+        tr.setAttribute('data-id', c.id);
+        tr.innerHTML =
+          '<td><input type="checkbox" class="row-check" data-id="' + c.id + '"></td>' +
+          '<td class="col-name">' + escapeHtml(c.name) + '</td>' +
+          '<td>' + escapeHtml(c.current_position || '-') + '</td>' +
+          '<td>' + escapeHtml(c.current_company || '-') + '</td>' +
+          '<td>' + (c.years_of_experience != null ? c.years_of_experience + ' 年' : '-') + '</td>' +
+          '<td>' + escapeHtml(c.current_city || '-') + '</td>' +
+          '<td><span class="status-pill ' + escapeHtml(c.status) + '">' + statusLabel(c.status) + '</span></td>' +
+          '<td>' + renderRating(c.rating) + '</td>' +
+          '<td>' + renderTags(c.tags) + '</td>' +
+          '<td style="font-size:12px;color:var(--color-text-secondary);">' + (c.updated_at || '').substring(0, 10) + '</td>' +
+          '<td class="col-actions">' +
+            '<button class="btn-link" data-act="view">查看</button>' +
+            '<button class="btn-link" data-act="edit">编辑</button>' +
+            '<button class="btn-link danger" data-act="delete">删除</button>' +
+          '</td>';
+        return tr;
+      }
+
+      function renderEmpty() {
+        var tbody = document.getElementById('candidateTbody');
+        tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state">' +
+          '<div class="empty-state-icon">📭</div>' +
+          '<div class="empty-state-title">暂无候选人</div>' +
+          '<div class="empty-state-desc">点击右上角"新建候选人"开始添加</div>' +
+          '</div></td></tr>';
+        document.getElementById('pagination').innerHTML = '';
+        document.getElementById('totalCount').textContent = '';
+      }
+
+      function renderPagination() {
+        var total = state.total;
+        var totalPages = Math.max(1, Math.ceil(total / state.pageSize));
+        if (totalPages <= 1) {
+          document.getElementById('pagination').innerHTML =
+            '<div class="pagination-info">共 ' + total + ' 条</div><div></div>';
+          return;
+        }
+        var html = '<div class="pagination-info">共 ' + total + ' 条 · 第 ' + state.page + ' / ' + totalPages + ' 页</div>';
+        html += '<div class="pagination-pages">';
+        html += '<button data-page="' + (state.page - 1) + '"' + (state.page <= 1 ? ' disabled' : '') + '>上一页</button>';
+        var start = Math.max(1, state.page - 2);
+        var end = Math.min(totalPages, start + 4);
+        start = Math.max(1, end - 4);
+        for (var i = start; i <= end; i++) {
+          html += '<button data-page="' + i + '"' + (i === state.page ? ' class="active"' : '') + '>' + i + '</button>';
+        }
+        html += '<button data-page="' + (state.page + 1) + '"' + (state.page >= totalPages ? ' disabled' : '') + '>下一页</button>';
+        html += '</div>';
+        document.getElementById('pagination').innerHTML = html;
+      }
+
+      function loadCandidates() {
+        if (!window.API || !window.API.candidates) return;
+        var params = {
+          page: state.page,
+          pageSize: state.pageSize
+        };
+        if (state.keyword) params.keyword = state.keyword;
+        if (state.status) params.status = state.status;
+        if (state.city) params.city = state.city;
+        if (state.education) params.education_level = state.education;
+        if (state.industry) params.industry = state.industry;
+        if (state.salaryMin) params.salary_min = state.salaryMin;
+        if (state.salaryMax) params.salary_max = state.salaryMax;
+        if (state.hasRec) params.has_recommendation = state.hasRec;
+        if (state.sort) params.sort = state.sort;
+
+        window.API.candidates.list(params).then(function (r) {
+          if (!r || !r.ok) { renderEmpty(); return; }
+          state.total = (r.meta && r.meta.total) || 0;
+          document.getElementById('totalCount').textContent = '（' + state.total + '）';
+          var tbody = document.getElementById('candidateTbody');
+          tbody.innerHTML = '';
+          if (!r.data || r.data.length === 0) { renderEmpty(); return; }
+          r.data.forEach(function (c) { tbody.appendChild(renderRow(c)); });
+          renderPagination();
+          refreshCityOptions(r.data);
+          // ===== P1-1 修复：每次重新加载清空选中（全选 checkbox + 所有 row-check） =====
+          var selectAll = document.getElementById('selectAllCheck');
+          if (selectAll) selectAll.checked = false;
+          clearSelection();
+          // ===== 修复结束 =====
+        });
+      }
+
+      var loadedCities = {};
+      function refreshCityOptions(rows) {
+        rows.forEach(function (c) {
+          if (c.current_city) loadedCities[c.current_city] = true;
+        });
+        var sel = document.getElementById('cityFilter');
+        var currentVal = sel.value;
+        var opts = '<option value="">全部</option>';
+        Object.keys(loadedCities).sort().forEach(function (city) {
+          opts += '<option value="' + escapeHtml(city) + '"' + (city === currentVal ? ' selected' : '') + '>' + escapeHtml(city) + '</option>';
+        });
+        sel.innerHTML = opts;
+      }
+
+      function resetFilters() {
+        state.keyword = '';
+        state.status = '';
+        state.city = '';
+        state.education = '';
+        state.industry = '';
+        state.salaryMin = '';
+        state.salaryMax = '';
+        state.hasRec = '';
+        state.sort = '';
+        state.page = 1;
+        document.getElementById('searchInput').value = '';
+        document.getElementById('statusFilter').value = '';
+        document.getElementById('cityFilter').value = '';
+        document.getElementById('educationFilter').value = '';
+        document.getElementById('industryFilter').value = '';
+        document.getElementById('salaryMinFilter').value = '';
+        document.getElementById('salaryMaxFilter').value = '';
+        document.getElementById('hasRecFilter').value = '';
+        document.getElementById('sortFilter').value = '';
+        loadCandidates();
+      }
+
+      // 视图保存/加载（localStorage）
+      function loadViews() {
+        try { return JSON.parse(localStorage.getItem(VIEWS_KEY) || '[]'); } catch (e) { return []; }
+      }
+      function saveViews(arr) {
+        try { localStorage.setItem(VIEWS_KEY, JSON.stringify(arr)); } catch (e) {}
+      }
+      function refreshViewSelect() {
+        var sel = document.getElementById('viewSelect');
+        var currentVal = sel.value;
+        var opts = '<option value="">选择已保存视图...</option>';
+        loadViews().forEach(function (v) {
+          opts += '<option value="' + escapeHtml(v.id) + '">' + escapeHtml(v.name) + '</option>';
+        });
+        sel.innerHTML = opts;
+        sel.value = currentVal;
+        var del = document.getElementById('deleteViewBtn');
+        if (del) del.style.display = currentVal ? '' : 'none';
+      }
+      function saveCurrentAsView() {
+        var name = prompt('视图名称（如：本科+北京+3年以上）：');
+        if (!name) return;
+        var views = loadViews();
+        var id = 'view_' + Date.now();
+        views.push({ id: id, name: name, state: {
+          keyword: state.keyword, status: state.status, city: state.city,
+          education: state.education, industry: state.industry,
+          salaryMin: state.salaryMin, salaryMax: state.salaryMax,
+          hasRec: state.hasRec, sort: state.sort
+        }});
+        saveViews(views);
+        refreshViewSelect();
+        document.getElementById('viewSelect').value = id;
+        window.UI && window.UI.showToast && window.UI.showToast({ type: 'success', title: '已保存', message: '视图已保存' });
+      }
+      function applyView(id) {
+        var views = loadViews();
+        var v = views.find(function (x) { return x.id === id; });
+        if (!v) return;
+        var s = v.state;
+        // ===== P2-D2 修复：校验字段值是否还在合法选项中 =====
+        // 字段值如 city="上海" 改名为"上海市"后旧值失效，不应继续 filter
+        var validOptions = {
+          status: ['active', 'passive', 'placed', 'unavailable', 'blacklist'],
+          education: ['bachelor', 'master', 'phd', 'highschool'],
+          hasRec: ['', 'true', 'false'],
+          sort: ['', 'created_at_desc', 'salary_desc', 'years_desc']
+        };
+        var stale = [];
+        if (s.status && validOptions.status.indexOf(s.status) === -1) { stale.push('status=' + s.status); s.status = ''; }
+        if (s.education && validOptions.education.indexOf(s.education) === -1) { stale.push('education=' + s.education); s.education = ''; }
+        if (s.hasRec !== undefined && s.hasRec !== '' && validOptions.hasRec.indexOf(s.hasRec) === -1) { stale.push('hasRec=' + s.hasRec); s.hasRec = ''; }
+        if (s.sort && validOptions.sort.indexOf(s.sort) === -1) { stale.push('sort=' + s.sort); s.sort = ''; }
+        // ===== 修复结束 =====
+        state.keyword = s.keyword || '';
+        state.status = s.status || '';
+        state.city = s.city || '';
+        state.education = s.education || '';
+        state.industry = s.industry || '';
+        state.salaryMin = s.salaryMin || '';
+        state.salaryMax = s.salaryMax || '';
+        state.hasRec = s.hasRec || '';
+        state.sort = s.sort || '';
+        state.page = 1;
+        document.getElementById('searchInput').value = state.keyword;
+        document.getElementById('statusFilter').value = state.status;
+        document.getElementById('cityFilter').value = state.city;
+        document.getElementById('educationFilter').value = state.education;
+        document.getElementById('industryFilter').value = state.industry;
+        document.getElementById('salaryMinFilter').value = state.salaryMin;
+        document.getElementById('salaryMaxFilter').value = state.salaryMax;
+        document.getElementById('hasRecFilter').value = state.hasRec;
+        document.getElementById('sortFilter').value = state.sort;
+        loadCandidates();
+        if (stale.length) {
+          window.UI.showToast({ type: 'info', title: '视图已部分失效', message: '已重置字段：' + stale.join(', ') });
+        }
+      }
+      function deleteView(id) {
+        var views = loadViews().filter(function (x) { return x.id !== id; });
+        saveViews(views);
+        refreshViewSelect();
+        document.getElementById('viewSelect').value = '';
+      }
+
+      // 批量操作
+      function getSelectedIds() {
+        var ids = [];
+        document.querySelectorAll('.row-check:checked').forEach(function (c) {
+          var id = parseInt(c.getAttribute('data-id'));
+          if (id) ids.push(id);
+        });
+        return ids;
+      }
+      function updateBatchBar() {
+        var ids = getSelectedIds();
+        var bar = document.getElementById('batchBar');
+        var totalSpan = document.getElementById('selectAllPagesTotal');
+        var selectAllPagesBtn = document.getElementById('selectAllPagesBtn');
+        // ===== P2-D3：全选所有页 UI 控制 =====
+        if (state.selectAllPages) {
+          document.getElementById('batchCount').textContent = state.total;
+          if (totalSpan) totalSpan.textContent = state.total;
+          if (selectAllPagesBtn) {
+            selectAllPagesBtn.textContent = '取消全选所有';
+            selectAllPagesBtn.style.display = '';
+          }
+        } else {
+          document.getElementById('batchCount').textContent = ids.length;
+          if (selectAllPagesBtn && state.total > ids.length && ids.length > 0) {
+            if (totalSpan) totalSpan.textContent = state.total;
+            selectAllPagesBtn.textContent = '全选所有 ' + state.total + ' 人';
+            selectAllPagesBtn.style.display = '';
+          } else if (selectAllPagesBtn) {
+            selectAllPagesBtn.style.display = 'none';
+          }
+        }
+        // ===== 修复结束 =====
+        if (ids.length > 0 || state.selectAllPages) bar.classList.add('show');
+        else bar.classList.remove('show');
+      }
+      function clearSelection() {
+        document.querySelectorAll('.row-check').forEach(function (c) { c.checked = false; });
+        var all = document.getElementById('selectAllCheck');
+        if (all) all.checked = false;
+        state.selectAllPages = false;
+        updateBatchBar();
+      }
+      function openBatchTagModal(ids) {
+        // ===== P2-D3：selectAllPages 模式提示 =====
+        if (state.selectAllPages && !ids.length) {
+          if (!confirm('当前后端 v1.0 暂不支持"全选所有页"批量操作，\n将只对当前页选中的 ' + state.total + ' 人执行（实际只能操作已勾选的候选人）。\n\n是否继续？')) return;
+          ids = getSelectedIds();
+          if (!ids.length) { window.UI.showToast({ type: 'info', title: '提示', message: '请先勾选候选人' }); return; }
+        }
+        // ===== 修复结束 =====
+        var html = '<form id="batchForm" class="form"><div class="form-group"><label class="form-label required">标签名</label><input class="form-input" name="tag" required placeholder="如 VIP、重点关注"></div></form>';
+        window.UI.showModal({
+          title: '批量打标签 · ' + ids.length + ' 人',
+          content: html, confirmText: '打标签', cancelText: '取消', showCancel: true, width: 420,
+          onConfirm: function () {
+            var v = document.querySelector('#batchForm [name="tag"]').value.trim();
+            if (!v) return;
+            window.API.candidates.batchAction('tag', ids, { tag: v }).then(function (r) {
+              if (r && r.ok) {
+                window.UI.showToast({ type: 'success', title: '已打标签', message: r.data.success + ' 人成功' });
+                clearSelection(); loadCandidates();
+              }
+            });
+          }
+        });
+      }
+      function openBatchStatusModal(ids) {
+        // ===== P2-D3：selectAllPages 模式提示 =====
+        if (state.selectAllPages && !ids.length) {
+          if (!confirm('当前后端 v1.0 暂不支持"全选所有页"批量操作，\n将只对当前页选中的候选人执行。\n\n是否继续？')) return;
+          ids = getSelectedIds();
+          if (!ids.length) { window.UI.showToast({ type: 'info', title: '提示', message: '请先勾选候选人' }); return; }
+        }
+        // ===== 修复结束 =====
+        var html = '<form id="batchForm" class="form"><div class="form-group"><label class="form-label required">新状态</label>' +
+          '<select class="form-select" name="status" required>' +
+          '<option value="active">活跃求职</option><option value="passive">被动考虑</option>' +
+          '<option value="placed">已入职</option><option value="unavailable">暂不考虑</option>' +
+          '<option value="blacklist">黑名单</option></select></div></form>';
+        window.UI.showModal({
+          title: '批量改状态 · ' + ids.length + ' 人',
+          content: html, confirmText: '改状态', cancelText: '取消', showCancel: true, width: 420,
+          onConfirm: function () {
+            var v = document.querySelector('#batchForm [name="status"]').value;
+            if (!v) return;
+            window.API.candidates.batchAction('status', ids, { status: v }).then(function (r) {
+              if (r && r.ok) {
+                window.UI.showToast({ type: 'success', title: '已改状态', message: r.data.success + ' 人成功' });
+                clearSelection(); loadCandidates();
+              }
+            });
+          }
+        });
+      }
+      function confirmBatchDelete(ids) {
+        // ===== P2-D3：selectAllPages 模式提示 =====
+        if (state.selectAllPages && !ids.length) {
+          if (!confirm('当前后端 v1.0 暂不支持"全选所有页"批量操作，\n将只对当前页选中的候选人执行。\n\n是否继续？')) return;
+          ids = getSelectedIds();
+          if (!ids.length) { window.UI.showToast({ type: 'info', title: '提示', message: '请先勾选候选人' }); return; }
+        }
+        // ===== 修复结束 =====
+        window.UI.showConfirm({
+          title: '确认批量删除',
+          content: '将删除 ' + ids.length + ' 位候选人（软删除，可恢复）。确定继续？',
+          type: 'warning',
+          confirmText: '删除',
+          onConfirm: function () {
+            window.API.candidates.batchAction('delete', ids, {}).then(function (r) {
+              if (r && r.ok) {
+                window.UI.showToast({ type: 'success', title: '已删除', message: r.data.success + ' 人成功' });
+                clearSelection(); loadCandidates();
+              }
+            });
+          }
+        });
+      }
+
+      function bindEvents() {
+        on('searchInput', 'input', function (e) {
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(function () {
+            state.keyword = e.target.value.trim();
+            state.page = 1;
+            loadCandidates();
+          }, 300);
+        });
+        on('statusFilter', 'change', function (e) { state.status = e.target.value; state.page = 1; loadCandidates(); });
+        on('cityFilter', 'change', function (e) { state.city = e.target.value; state.page = 1; loadCandidates(); });
+        on('educationFilter', 'change', function (e) { state.education = e.target.value; state.page = 1; loadCandidates(); });
+        on('industryFilter', 'change', function (e) { state.industry = e.target.value.trim(); state.page = 1; loadCandidates(); });
+        on('salaryMinFilter', 'change', function (e) { state.salaryMin = e.target.value; state.page = 1; loadCandidates(); });
+        on('salaryMaxFilter', 'change', function (e) { state.salaryMax = e.target.value; state.page = 1; loadCandidates(); });
+        on('hasRecFilter', 'change', function (e) { state.hasRec = e.target.value; state.page = 1; loadCandidates(); });
+        on('sortFilter', 'change', function (e) { state.sort = e.target.value; state.page = 1; loadCandidates(); });
+        on('resetFilterBtn', 'click', resetFilters);
+        on('newBtn', 'click', function () {
+          if (!window.CandidateForm) return;
+          window.CandidateForm.open({ mode: 'create', onSaved: function () { loadCandidates(); } });
+        });
+
+        // 视图
+        on('saveViewBtn', 'click', saveCurrentAsView);
+        on('viewSelect', 'change', function (e) {
+          var id = e.target.value;
+          if (id) applyView(id);
+        });
+        on('deleteViewBtn', 'click', function () {
+          var id = document.getElementById('viewSelect').value;
+          if (id && confirm('确定删除这个视图？')) deleteView(id);
+        });
+
+        // 全选
+        on('selectAllCheck', 'change', function (e) {
+          var checked = e.target.checked;
+          document.querySelectorAll('.row-check').forEach(function (c) { c.checked = checked; });
+        });
+
+        // 行 checkbox 变化更新 batch bar
+        var tbodyEl = document.getElementById('candidateTbody');
+        tbodyEl.addEventListener('change', function (e) {
+          if (e.target.classList.contains('row-check')) updateBatchBar();
+        });
+        // 全选 checkbox 也要触发
+        on('selectAllCheck', 'change', updateBatchBar);
+
+        // 批量操作按钮
+        var batchBar = document.getElementById('batchBar');
+        batchBar.addEventListener('click', function (e) {
+          // ===== P2-D3 修复：全选所有页按钮 =====
+          if (e.target.id === 'selectAllPagesBtn') {
+            state.selectAllPages = !state.selectAllPages;
+            updateBatchBar();
+            return;
+          }
+          // ===== 修复结束 =====
+          var act = e.target.getAttribute('data-batch');
+          if (!act) return;
+          if (act === 'cancel') { clearSelection(); return; }
+          var ids = getSelectedIds();
+          if (!ids.length && !state.selectAllPages) return;
+          if (act === 'tag') return openBatchTagModal(state.selectAllPages ? [] : ids);
+          if (act === 'status') return openBatchStatusModal(state.selectAllPages ? [] : ids);
+          if (act === 'delete') return confirmBatchDelete(ids);
+        });
+
+        var tbody = document.getElementById('candidateTbody');
+        tbody.addEventListener('click', function (e) {
+          var tr = e.target.closest && e.target.closest('tr');
+          if (!tr || !tr.getAttribute('data-id')) return;
+          var id = tr.getAttribute('data-id');
+          var act = e.target.getAttribute('data-act');
+          if (act === 'edit') {
+            e.stopPropagation();
+            window.API.candidates.get(id).then(function (r) {
+              if (r && r.ok) {
+                window.CandidateForm.open({ mode: 'edit', candidate: r.data, onSaved: function () { loadCandidates(); } });
+              }
+            });
+          } else if (act === 'delete') {
+            e.stopPropagation();
+            window.UI.showConfirm({
+              title: '确认删除',
+              content: '确定要删除这位候选人吗？相关工作经历、教育、联系记录将保留。',
+              type: 'warning',
+              confirmText: '删除',
+              onConfirm: function () {
+                window.API.candidates.remove(id).then(function (r) {
+                  if (r && r.ok) {
+                    window.UI.showToast({ type: 'success', title: '已删除', message: '候选人已删除' });
+                    loadCandidates();
+                  }
+                });
+              }
+            });
+          } else {
+            window.Router.navigate('candidate-detail.html?id=' + id);
+          }
+        });
+
+        var pag = document.getElementById('pagination');
+        pag.addEventListener('click', function (e) {
+          var btn = e.target.closest && e.target.closest('button[data-page]');
+          if (!btn || btn.disabled) return;
+          var p = parseInt(btn.getAttribute('data-page'));
+          if (p && p !== state.page) { state.page = p; loadCandidates(); }
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () { bindEvents(); refreshViewSelect(); loadCandidates(); });
+      } else {
+        bindEvents();
+        refreshViewSelect();
+        loadCandidates();
+      }
+    })();
+  </script>
+  <script src="../shared/shared.js"></script>
+  <script src="../shared/layout.js"></script>
+</body>
+</html>

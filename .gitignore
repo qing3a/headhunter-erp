@@ -1,0 +1,8 @@
+node_modules/
+bff/node_modules/
+bff/data/*.db*
+*.log
+.DS_Store
+.env.local
+.vscode/
+.idea/

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>标签管理</title>
+  <link rel="stylesheet" href="../shared/shared.css">
+  <script src="../shared/auth.js"></script>
+  <script src="../shared/loading.js"></script>
+  <script src="../shared/router.js"></script>
+  <script src="../shared/api.js"></script>
+  <style id="pageStyle">
+    .tag-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .tag-toolbar input { flex: 1; max-width: 320px; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 14px; }
+    .tag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+    .tag-card { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px 16px; cursor: pointer; transition: all 0.15s; }
+    .tag-card:hover { border-color: var(--color-primary); box-shadow: 0 2px 8px rgba(13,148,136,0.1); }
+    .tag-card .name { font-size: 15px; font-weight: 500; color: var(--color-primary-dark); margin-bottom: 6px; }
+    .tag-card .count { font-size: 13px; color: var(--color-text-secondary); }
+    .tag-card .actions { display: flex; gap: 4px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--color-border-light); }
+    .tag-card .actions button { flex: 1; background: none; border: 1px solid var(--color-border); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; color: var(--color-text-secondary); }
+    .tag-card .actions button:hover { background: var(--color-bg-page-secondary); }
+    .tag-card .actions button.danger:hover { color: #dc2626; border-color: #dc2626; }
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--color-text-secondary); }
+  </style>
+</head>
+<body>
+  <div id="pageContent">
+    <div class="tag-toolbar">
+      <input type="text" id="searchInput" placeholder="搜索标签名...">
+      <button id="mergeBtn" class="btn btn-secondary" style="display:none;">合并所选</button>
+      <span id="selectInfo" style="color:var(--color-text-secondary);font-size:13px;display:none;"></span>
+    </div>
+
+    <div class="tag-grid" id="tagGrid"></div>
+  </div>
+
+  <script id="pageScript">
+    (function () {
+      var state = { tags: [], selected: {}, keyword: '' };
+      var debounceTimer;
+
+      function on(id, evt, handler) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener(evt, handler);
+      }
+
+      function escapeHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+
+      function loadTags() {
+        window.API.tags.list({ keyword: state.keyword || undefined }).then(function (r) {
+          if (!r || !r.ok) return;
+          state.tags = r.data || [];
+          renderTags();
+        });
+      }
+
+      function renderTags() {
+        var grid = document.getElementById('tagGrid');
+        if (!state.tags.length) {
+          grid.innerHTML = '<div class="empty-state"><div style="font-size:14px;">暂无标签</div><div style="font-size:12px;margin-top:8px;">在候选人详情页可给候选人打标签</div></div>';
+          return;
+        }
+        grid.innerHTML = state.tags.map(function (t) {
+          var checked = state.selected[t.name] ? 'checked' : '';
+          return '<div class="tag-card" data-tag="' + escapeHtml(t.name) + '">' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+              '<input type="checkbox" class="tag-check" data-tag="' + escapeHtml(t.name) + '" ' + checked + '>' +
+              '<div style="flex:1;">' +
+                '<div class="name">' + escapeHtml(t.name) + '</div>' +
+                '<div class="count">' + t.count + ' 位候选人</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="actions">' +
+              '<button data-act="view" data-tag="' + escapeHtml(t.name) + '">查看候选人</button>' +
+              '<button data-act="rename" data-tag="' + escapeHtml(t.name) + '">改名</button>' +
+              '<button data-act="delete" data-tag="' + escapeHtml(t.name) + '" class="danger">删除</button>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      }
+
+      function updateSelectionUI() {
+        var sel = Object.keys(state.selected).filter(function (k) { return state.selected[k]; });
+        var mergeBtn = document.getElementById('mergeBtn');
+        var selInfo = document.getElementById('selectInfo');
+        if (sel.length >= 2) {
+          mergeBtn.style.display = '';
+          selInfo.style.display = '';
+          selInfo.textContent = '已选 ' + sel.length + ' 个';
+        } else {
+          mergeBtn.style.display = 'none';
+          selInfo.style.display = 'none';
+        }
+      }
+
+      function bindEvents() {
+        on('searchInput', 'input', function (e) {
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(function () {
+            state.keyword = e.target.value.trim();
+            loadTags();
+          }, 300);
+        });
+
+        // 卡片点击 checkbox
+        var grid = document.getElementById('tagGrid');
+        grid.addEventListener('change', function (e) {
+          if (e.target.classList.contains('tag-check')) {
+            var name = e.target.getAttribute('data-tag');
+            state.selected[name] = e.target.checked;
+            updateSelectionUI();
+          }
+        });
+
+        // 卡片操作
+        grid.addEventListener('click', function (e) {
+          var btn = e.target.closest('button[data-act]');
+          if (!btn) return;
+          var act = btn.getAttribute('data-act');
+          var name = btn.getAttribute('data-tag');
+          if (act === 'view') return viewCandidates(name);
+          if (act === 'rename') return renameTag(name);
+          if (act === 'delete') return deleteTag(name);
+        });
+
+        // 合并
+        on('mergeBtn', 'click', function () {
+          var sel = Object.keys(state.selected).filter(function (k) { return state.selected[k]; });
+          if (sel.length < 2) return;
+          var target = prompt('合并到哪个目标标签？\n当前选中的标签：\n' + sel.join('\n') + '\n\n请输入目标标签名（将替换上面所有标签）：');
+          if (!target) return;
+          target = target.trim();
+          if (!target) return;
+          if (sel.indexOf(target) === -1) {
+            // target 不在选中列表 - 弹确认
+            if (!confirm('"' + target + '" 不在选中的标签中。\n将把 ' + sel.length + ' 个标签全部合并到 "' + target + '"，确定吗？')) return;
+          }
+          window.API.tags.merge(sel, target).then(function (r) {
+            if (r && r.ok) {
+              window.UI.showToast({ type: 'success', title: '已合并', message: r.data.updated + ' 条记录已更新' });
+              state.selected = {};
+              updateSelectionUI();
+              loadTags();
+            }
+          });
+        });
+      }
+
+      function viewCandidates(name) {
+        window.API.tags.candidates(name).then(function (r) {
+          if (!r || !r.ok) return;
+          var list = r.data || [];
+          var html = '<div style="max-height:60vh;overflow:auto;">' +
+            (list.length ? list.map(function (c) {
+              return '<div style="padding:10px;border-bottom:1px solid var(--color-border-light);">' +
+                '<div style="font-weight:500;">' + escapeHtml(c.name) + '</div>' +
+                '<div style="font-size:12px;color:var(--color-text-secondary);">' + escapeHtml(c.current_position || '-') + ' · ' + escapeHtml(c.current_company || '-') + ' · ' + escapeHtml(c.current_city || '-') + '</div>' +
+                '</div>';
+            }).join('') : '<div class="empty-state">该标签下无候选人</div>') +
+            '</div>';
+          window.UI.showModal({
+            title: '"' + name + '" 下的候选人（' + list.length + '）',
+            content: html, confirmText: '关闭', cancelText: '', showCancel: false, width: 500
+          });
+        });
+      }
+
+      function renameTag(oldName) {
+        var newName = prompt('将标签 "' + oldName + '" 改名为：');
+        if (!newName) return;
+        newName = newName.trim();
+        if (!newName || newName === oldName) return;
+        window.API.tags.rename(oldName, newName).then(function (r) {
+          if (r && r.ok) {
+            window.UI.showToast({ type: 'success', title: '已改名', message: r.data.updated + ' 条记录已更新' });
+            loadTags();
+          }
+        });
+      }
+
+      function deleteTag(name) {
+        if (!confirm('确认删除标签 "' + name + '"？\n该操作会从所有候选人身上移除此标签。')) return;
+        window.API.tags.remove(name).then(function (r) {
+          if (r && r.ok) {
+            window.UI.showToast({ type: 'success', title: '已删除', message: r.data.removed + ' 条记录已清理' });
+            loadTags();
+          }
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () { bindEvents(); loadTags(); });
+      } else {
+        bindEvents();
+        loadTags();
+      }
+    })();
+  </script>
+  <script src="../shared/shared.js"></script>
+  <script src="../shared/layout.js"></script>
+</body>
+</html>
