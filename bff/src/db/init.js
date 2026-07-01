@@ -69,7 +69,11 @@ async function init() {
           const changes = chgRows[0] && chgRows[0].values[0] ? Number(chgRows[0].values[0][0]) : 0;
           stmt.free();
           saveDB();
-          return { lastInsertRowid: lastId, changes: changes || 1 };
+          // ===== P0-NEW-2 修复：去掉 `|| 1` 兜底 =====
+          // 原 fallback 把合法 0-changes（乐观锁冲突、UPDATE WHERE 不命中）误报成 1，
+          // 导致 result.changes === 0 判断失效（P0-NEW-2 乐观锁基础）。
+          return { lastInsertRowid: lastId, changes: changes };
+          // ===== 修复结束 =====
         },
       };
     }
@@ -146,6 +150,7 @@ function createTables() {
       tags TEXT DEFAULT '[]',
       rating INTEGER DEFAULT 0,
       notes TEXT DEFAULT '',
+      version INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -331,6 +336,13 @@ function createTables() {
   // ===== P0-3 修复：user 表加 tokens_invalidated_after 列 =====
   // 用于改密后强制撤销之前签发的所有 JWT token；老库会自动添加（NULL 时跳过校验）。
   safeExec('ALTER TABLE users ADD COLUMN tokens_invalidated_after TEXT');
+  // ===== 修复结束 =====
+
+  // ===== P0-NEW-2 修复：candidate_tags 加 version 列做乐观锁 =====
+  // 跨文件写入（candidates.js PUT /:id/tags + batchAction vs tags.js rename/delete/merge）
+  // 仅用 withTagsLock 锁不全：绕过锁的写路径会读旧 JSON → 改 → 写 → 覆盖他人结果。
+  // 改为乐观锁：SELECT version → UPDATE WHERE version = ?，version 不匹配 → 拒绝/跳过。
+  safeExec('ALTER TABLE candidate_tags ADD COLUMN version INTEGER DEFAULT 0');
   // ===== 修复结束 =====
 
   STATE.db.exec(`

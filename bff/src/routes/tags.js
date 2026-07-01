@@ -80,7 +80,8 @@ router.put('/:tag/rename', withTagsLock(async (req, res) => {
     ? 'deleted_at IS NULL AND tags LIKE ?'
     : 'deleted_at IS NULL AND user_id = ? AND tags LIKE ?';
   const params = isAdmin ? ['%"' + oldName + '"%'] : [req.user.id, '%"' + oldName + '"%'];
-  const rows = db.prepare('SELECT candidate_id, tags FROM candidate_tags WHERE ' + where).all(...params);
+  // ===== P0-NEW-2 修复：SELECT 读 version 字段 =====
+  const rows = db.prepare('SELECT candidate_id, tags, version FROM candidate_tags WHERE ' + where).all(...params);
   let changed = 0;
   rows.forEach(function (r) {
     let tags = [];
@@ -89,9 +90,18 @@ router.put('/:tag/rename', withTagsLock(async (req, res) => {
     if (idx !== -1) {
       tags[idx] = newName;
       tags = Array.from(new Set(tags));
-      db.prepare('UPDATE candidate_tags SET tags = ?, updated_at = datetime(\'now\') WHERE candidate_id = ?')
-        .run(JSON.stringify(tags), r.candidate_id);
-      changed++;
+      // ===== P0-NEW-2 修复：乐观锁，UPDATE WHERE version = ? =====
+      const result = db.prepare(`
+        UPDATE candidate_tags SET tags = ?, version = version + 1, updated_at = datetime('now')
+        WHERE candidate_id = ? AND version = ?
+      `).run(JSON.stringify(tags), r.candidate_id, r.version || 0);
+      if (result.changes === 0) {
+        // 静默跳过，标记冲突（不影响主流程）
+        console.warn('P0-NEW-2: rename conflict for candidate', r.candidate_id);
+      } else {
+        changed++;
+      }
+      // ===== 修复结束 =====
     }
   });
   auditService.log(req.user.id, 'RENAME_tag', 'tag', null, { from: oldName, to: newName, count: changed }, req.ip);
@@ -106,7 +116,8 @@ router.delete('/:tag', withTagsLock(async (req, res) => {
     ? 'deleted_at IS NULL AND tags LIKE ?'
     : 'deleted_at IS NULL AND user_id = ? AND tags LIKE ?';
   const params = isAdmin ? ['%"' + tagName + '"%'] : [req.user.id, '%"' + tagName + '"%'];
-  const rows = db.prepare('SELECT candidate_id, tags FROM candidate_tags WHERE ' + where).all(...params);
+  // ===== P0-NEW-2 修复：SELECT 读 version 字段 =====
+  const rows = db.prepare('SELECT candidate_id, tags, version FROM candidate_tags WHERE ' + where).all(...params);
   let removed = 0;
   rows.forEach(function (r) {
     let tags = [];
@@ -116,12 +127,22 @@ router.delete('/:tag', withTagsLock(async (req, res) => {
       tags.splice(idx, 1);
       const json = JSON.stringify(tags);
       if (tags.length === 0) {
+        // 没 tag 了，整行删除（不影响 version 链，主键行不存在）
         db.prepare('DELETE FROM candidate_tags WHERE candidate_id = ?').run(r.candidate_id);
+        removed++;
       } else {
-        db.prepare('UPDATE candidate_tags SET tags = ?, updated_at = datetime(\'now\') WHERE candidate_id = ?')
-          .run(json, r.candidate_id);
+        // ===== P0-NEW-2 修复：乐观锁 =====
+        const result = db.prepare(`
+          UPDATE candidate_tags SET tags = ?, version = version + 1, updated_at = datetime('now')
+          WHERE candidate_id = ? AND version = ?
+        `).run(json, r.candidate_id, r.version || 0);
+        if (result.changes === 0) {
+          console.warn('P0-NEW-2: delete-tag conflict for candidate', r.candidate_id);
+        } else {
+          removed++;
+        }
+        // ===== 修复结束 =====
       }
-      removed++;
     }
   });
   auditService.log(req.user.id, 'DELETE_tag', 'tag', null, { tag: tagName, count: removed }, req.ip);
@@ -143,7 +164,8 @@ router.post('/merge', withTagsLock(async (req, res) => {
     const like = '%"' + oldName + '"%';
     const where = isAdmin ? 'deleted_at IS NULL AND tags LIKE ?' : 'deleted_at IS NULL AND user_id = ? AND tags LIKE ?';
     const params = isAdmin ? [like] : [req.user.id, like];
-    const rows = db.prepare('SELECT candidate_id, tags FROM candidate_tags WHERE ' + where).all(...params);
+    // ===== P0-NEW-2 修复：SELECT 读 version 字段 =====
+    const rows = db.prepare('SELECT candidate_id, tags, version FROM candidate_tags WHERE ' + where).all(...params);
     rows.forEach(function (r) {
       let tags = [];
       try { tags = JSON.parse(r.tags || '[]'); } catch (e) {}
@@ -151,16 +173,25 @@ router.post('/merge', withTagsLock(async (req, res) => {
       if (idx !== -1) {
         tags[idx] = base;
         tags = Array.from(new Set(tags));
-        db.prepare('UPDATE candidate_tags SET tags = ?, updated_at = datetime(\'now\') WHERE candidate_id = ?')
-          .run(JSON.stringify(tags), r.candidate_id);
-        totalUpdated++;
+        // ===== P0-NEW-2 修复：乐观锁 =====
+        const result = db.prepare(`
+          UPDATE candidate_tags SET tags = ?, version = version + 1, updated_at = datetime('now')
+          WHERE candidate_id = ? AND version = ?
+        `).run(JSON.stringify(tags), r.candidate_id, r.version || 0);
+        if (result.changes === 0) {
+          console.warn('P0-NEW-2: merge-phase1 conflict for candidate', r.candidate_id);
+        } else {
+          totalUpdated++;
+        }
+        // ===== 修复结束 =====
       }
     });
   }
   const like2 = '%"' + base + '"%';
   const where2 = isAdmin ? 'deleted_at IS NULL AND tags LIKE ?' : 'deleted_at IS NULL AND user_id = ? AND tags LIKE ?';
   const params2 = isAdmin ? [like2] : [req.user.id, like2];
-  const rows2 = db.prepare('SELECT candidate_id, tags FROM candidate_tags WHERE ' + where2).all(...params2);
+  // ===== P0-NEW-2 修复：SELECT 读 version 字段 =====
+  const rows2 = db.prepare('SELECT candidate_id, tags, version FROM candidate_tags WHERE ' + where2).all(...params2);
   rows2.forEach(function (r) {
     let tags = [];
     try { tags = JSON.parse(r.tags || '[]'); } catch (e) {}
@@ -168,9 +199,17 @@ router.post('/merge', withTagsLock(async (req, res) => {
     if (idx !== -1) {
       tags[idx] = target;
       tags = Array.from(new Set(tags));
-      db.prepare('UPDATE candidate_tags SET tags = ?, updated_at = datetime(\'now\') WHERE candidate_id = ?')
-        .run(JSON.stringify(tags), r.candidate_id);
-      totalUpdated++;
+      // ===== P0-NEW-2 修复：乐观锁 =====
+      const result = db.prepare(`
+        UPDATE candidate_tags SET tags = ?, version = version + 1, updated_at = datetime('now')
+        WHERE candidate_id = ? AND version = ?
+      `).run(JSON.stringify(tags), r.candidate_id, r.version || 0);
+      if (result.changes === 0) {
+        console.warn('P0-NEW-2: merge-phase2 conflict for candidate', r.candidate_id);
+      } else {
+        totalUpdated++;
+      }
+      // ===== 修复结束 =====
     }
   });
   auditService.log(req.user.id, 'MERGE_tags', 'tag', null, { from: allFroms, to: target, count: totalUpdated }, req.ip);

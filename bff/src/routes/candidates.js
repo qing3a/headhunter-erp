@@ -1,7 +1,7 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const { success, pagination } = require('../utils/response');
-const { notFound, badRequest, duplicate } = require('../utils/errors');
+const { notFound, badRequest, duplicate, conflict } = require('../utils/errors');
 const auditService = require('../services/auditService');
 const asyncHandler = require('../utils/asyncHandler');
 const { getDb } = require('../db/init');
@@ -389,11 +389,20 @@ router.put('/:id/tags', asyncHandler(async (req, res) => {
   const existing = db.prepare('SELECT candidate_id FROM candidate_tags WHERE candidate_id = ?').get(cidStr);
   let before = null;
   if (existing) {
-    before = db.prepare('SELECT tags, rating, notes FROM candidate_tags WHERE candidate_id = ?').get(cidStr);
-    db.prepare(`
-      UPDATE candidate_tags SET tags = ?, rating = ?, notes = ?, updated_at = datetime('now')
-      WHERE candidate_id = ?
-    `).run(tagsJson, ratingVal, notesVal, cidStr);
+    // ===== P0-NEW-2 修复：乐观锁，version 不匹配时拒 =====
+    // 读 tags/rating/notes + version；UPDATE WHERE version = ?，version 不匹配 → 冲突
+    const current = db.prepare(
+      'SELECT tags, rating, notes, version FROM candidate_tags WHERE candidate_id = ?'
+    ).get(cidStr);
+    before = {
+      tags: current.tags, rating: current.rating, notes: current.notes, version: current.version
+    };
+    const result = db.prepare(`
+      UPDATE candidate_tags SET tags = ?, rating = ?, notes = ?, version = version + 1, updated_at = datetime('now')
+      WHERE candidate_id = ? AND version = ?
+    `).run(tagsJson, ratingVal, notesVal, cidStr, current.version);
+    if (result.changes === 0) throw conflict('tags 已被他人修改，请刷新');
+    // ===== 修复结束 =====
   } else {
     db.prepare(`
       INSERT INTO candidate_tags (candidate_id, tags, rating, notes, user_id) VALUES (?, ?, ?, ?, ?)
@@ -582,25 +591,34 @@ router.post('/batch', asyncHandler(async (req, res) => {
       } else if (action === 'tag') {
         if (!params.tag || !String(params.tag).trim()) throw badRequest('tag 必填');
         const tagStr = String(params.tag).trim();
-        const existing = db.prepare('SELECT tags FROM candidate_tags WHERE candidate_id = ?').get(id);
+        // ===== P0-NEW-2 修复：乐观锁 =====
+        const existing = db.prepare('SELECT tags, version FROM candidate_tags WHERE candidate_id = ?').get(id);
         let tags = [];
+        let version = 0;
         if (existing && existing.tags) {
           try { tags = JSON.parse(existing.tags); } catch (e) {}
+          version = existing.version || 0;
         }
         if (tags.indexOf(tagStr) === -1) {
           tags.push(tagStr);
           const json = JSON.stringify(tags);
           if (existing) {
-            db.prepare('UPDATE candidate_tags SET tags = ?, updated_at = datetime(\'now\') WHERE candidate_id = ?').run(json, id);
+            const r = db.prepare(`
+              UPDATE candidate_tags SET tags = ?, version = version + 1, updated_at = datetime('now')
+              WHERE candidate_id = ? AND version = ?
+            `).run(json, id, version);
+            if (r.changes === 0) console.warn('P0-NEW-2: batch tag conflict for candidate', id);
           } else {
             db.prepare('INSERT INTO candidate_tags (candidate_id, tags, user_id) VALUES (?, ?, ?)').run(id, json, req.user.id);
           }
+          // ===== 修复结束 =====
           auditService.log(req.user.id, 'BATCH_TAG_candidate', 'candidate', id, { tag: tagStr }, req.ip);
         }
       } else if (action === 'untag') {
         if (!params.tag) throw badRequest('tag 必填');
         const tagStr = String(params.tag);
-        const existing = db.prepare('SELECT tags FROM candidate_tags WHERE candidate_id = ?').get(id);
+        // ===== P0-NEW-2 修复：乐观锁 =====
+        const existing = db.prepare('SELECT tags, version FROM candidate_tags WHERE candidate_id = ?').get(id);
         if (existing && existing.tags) {
           let tags = [];
           try { tags = JSON.parse(existing.tags); } catch (e) {}
@@ -608,10 +626,15 @@ router.post('/batch', asyncHandler(async (req, res) => {
           if (idx !== -1) {
             tags.splice(idx, 1);
             const json = JSON.stringify(tags);
-            db.prepare('UPDATE candidate_tags SET tags = ?, updated_at = datetime(\'now\') WHERE candidate_id = ?').run(json, id);
+            const r = db.prepare(`
+              UPDATE candidate_tags SET tags = ?, version = version + 1, updated_at = datetime('now')
+              WHERE candidate_id = ? AND version = ?
+            `).run(json, id, existing.version || 0);
+            if (r.changes === 0) console.warn('P0-NEW-2: batch untag conflict for candidate', id);
             auditService.log(req.user.id, 'BATCH_UNTAG_candidate', 'candidate', id, { tag: tagStr }, req.ip);
           }
         }
+        // ===== 修复结束 =====
       } else {
         throw badRequest('不支持的 action: ' + action);
       }
