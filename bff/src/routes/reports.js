@@ -58,8 +58,10 @@ router.get('/funnel', asyncHandler(async (req, res) => {
   const since = new Date(Date.now() - days * 86400 * 1000).toISOString().slice(0, 19).replace('T', ' ');
   const isAdmin = req.user.role === 'admin';
   const db = getDb();
-  const userWhere = isAdmin ? '1=1' : 'recommend_user_id = ' + req.user.id;
-  const userParams = isAdmin ? [] : [];
+  // ===== P1-NEW-1 修复：参数化 SQL，避免字符串拼接 =====
+  const userWhere = isAdmin ? '1=1' : 'recommend_user_id = ?';
+  const userParams = isAdmin ? [] : [req.user.id];
+  // ===== 修复结束 =====
 
   // 各状态计数（在 N 天内有 recommend_at 或 last_status_change_at 的推荐）
   const stages = [
@@ -90,7 +92,9 @@ router.get('/consultant-performance', asyncHandler(async (req, res) => {
   const db = getDb();
 
   // 只 admin 能看所有人的；consultant 只能看自己
-  const where = isAdmin ? '1=1' : 'recommend_user_id = ' + req.user.id;
+  // ===== P1-NEW-1 修复：参数化 =====
+  const where = isAdmin ? '1=1' : 'recommend_user_id = ?';
+  const whereParams = isAdmin ? [] : [req.user.id];
   const rows = db.prepare(
     `SELECT recommend_user_id AS user_id, recommend_username AS username,
             COUNT(*) AS total,
@@ -100,7 +104,8 @@ router.get('/consultant-performance', asyncHandler(async (req, res) => {
      WHERE ${where} AND recommend_at >= ?
      GROUP BY recommend_user_id, recommend_username
      ORDER BY total DESC LIMIT 10`
-  ).all(since);
+  ).all(...whereParams, since);
+  // ===== 修复结束 =====
 
   res.json(success({ days: days, consultants: rows }));
 }));
