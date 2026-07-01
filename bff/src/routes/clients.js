@@ -138,6 +138,9 @@ router.delete('/:id', asyncHandler(async (req, res) => {
   }
   const result = db.prepare('UPDATE clients SET deleted_at = datetime(\'now\') WHERE id = ?').run(id);
   if (result.changes === 0) throw notFound('客户不存在或无权操作');
+  // ===== P1-NEW-6 修复：级联软删 client_notes =====
+  db.prepare("UPDATE client_notes SET deleted_at = datetime('now') WHERE client_id = ? AND deleted_at IS NULL").run(id);
+  // ===== 修复结束 =====
   auditService.log(req.user.id, 'DELETE_client', 'client', id, null, req.ip);
   res.json(success({ id, deleted: true }));
 }));
