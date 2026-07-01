@@ -420,7 +420,7 @@ async function seedUsersIfNeeded() {
   const enabled = ['1', 'true', 'yes', 'on'].includes(demoSeed) || isSeedRun;
   if (!enabled) return;
 
-  const cnt = db.prepare('SELECT COUNT(*) as cnt FROM users').get().cnt;
+  const cnt = STATE.db.prepare('SELECT COUNT(*) as cnt FROM users').get().cnt;
   if (cnt > 0 && !isSeedRun) return;
 
   const adminHash = await bcrypt.hash('admin123', 10);
@@ -442,7 +442,7 @@ async function seedUsersIfNeeded() {
 
   console.log('👤 Demo users seeded (admin/admin123, demo/demo123)');
 
-  const taskCnt = db.prepare('SELECT COUNT(*) as cnt FROM tasks').get().cnt;
+  const taskCnt = STATE.db.prepare('SELECT COUNT(*) as cnt FROM tasks').get().cnt;
   if (taskCnt === 0) {
     seedBusinessData();
   }
@@ -453,7 +453,7 @@ function seedBusinessData() {
   const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
   const nextWeek = new Date(today); nextWeek.setDate(nextWeek.getDate() + 7);
 
-  const insertTask = db.prepare(`
+  const insertTask = STATE.db.prepare(`
     INSERT INTO tasks (title, "desc", priority, due_date)
     VALUES (?, ?, ?, ?)
   `);
@@ -464,7 +464,7 @@ function seedBusinessData() {
   insertTask.run('跟进客户合同续签', '腾讯合作协议即将到期', 'high', nextWeek.toISOString().slice(0, 10));
   insertTask.run('补充职位JD详情', '小红书 — 高级产品设计师', 'low', nextWeek.toISOString().slice(0, 10));
 
-  const insertInterview = db.prepare(`
+  const insertInterview = STATE.db.prepare(`
     INSERT INTO interviews (candidate_name, job_title, client_name, interviewer, scheduled_at, type, status, note)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
@@ -488,13 +488,13 @@ function seedBusinessData() {
 }
 
 function seedJobs() {
-  const jobCnt = db.prepare('SELECT COUNT(*) as cnt FROM jobs').get().cnt;
+  const jobCnt = STATE.db.prepare('SELECT COUNT(*) as cnt FROM jobs').get().cnt;
   if (jobCnt > 0) return;
 
-  const adminId = db.prepare("SELECT id FROM users WHERE username = 'admin'").get()?.id;
+  const adminId = STATE.db.prepare("SELECT id FROM users WHERE username = 'admin'").get()?.id;
   if (!adminId) return;
 
-  const insertJob = db.prepare(`
+  const insertJob = STATE.db.prepare(`
     INSERT INTO jobs
       (title, company, department, city, industry,
        salary_min, salary_max, experience_min, experience_max, education_level,
@@ -522,13 +522,13 @@ function seedJobs() {
 }
 
 function seedCandidates() {
-  const candCnt = db.prepare('SELECT COUNT(*) as cnt FROM candidates').get().cnt;
+  const candCnt = STATE.db.prepare('SELECT COUNT(*) as cnt FROM candidates').get().cnt;
   if (candCnt > 0) return;
 
-  const adminId = db.prepare("SELECT id FROM users WHERE username = 'admin'").get()?.id;
+  const adminId = STATE.db.prepare("SELECT id FROM users WHERE username = 'admin'").get()?.id;
   if (!adminId) return;
 
-  const insertCand = db.prepare(`
+  const insertCand = STATE.db.prepare(`
     INSERT INTO candidates
       (name, gender, phone, email,
        current_position, current_company, years_of_experience, education_level, current_city,
@@ -559,17 +559,17 @@ function seedCandidates() {
     'one_month', 'unavailable', 'other', '招聘会', '暂时不考虑新机会', adminId);
 
   // 给张明加 2 段工作 + 1 段教育
-  const insertExp = db.prepare(`
+  const insertExp = STATE.db.prepare(`
     INSERT INTO candidate_experiences
       (candidate_id, company, position, start_date, end_date, is_current, salary, description, user_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const insertEdu = db.prepare(`
+  const insertEdu = STATE.db.prepare(`
     INSERT INTO candidate_educations
       (candidate_id, school, major, degree, start_date, end_date, is_current, user_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const insertContact = db.prepare(`
+  const insertContact = STATE.db.prepare(`
     INSERT INTO candidate_contacts
       (candidate_id, contact_type, contact_at, content, next_follow_up_at, user_id)
     VALUES (?, ?, ?, ?, ?, ?)

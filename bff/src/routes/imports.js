@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth');
 const { success } = require('../utils/response');
 const { badRequest } = require('../utils/errors');
@@ -18,7 +19,13 @@ const importLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: function (req) { return 'import_' + (req.user ? req.user.id : req.ip); },
+  // 用 ipKeyGenerator 包装 IP（express-rate-limit 8.x 要求），
+  // 已登录用户按 user.id 限流；未登录兜底用 IP（走 ipKeyGenerator 防 IPv6 绕过）
+  keyGenerator: function (req) {
+    if (req.user && req.user.id) return 'import_user_' + req.user.id;
+    // 未登录（路由 requireAuth 应挡住，这里是兜底）
+    return 'import_ip_' + ipKeyGenerator(req.ip);
+  },
   message: { ok: false, error: { code: 'RATE_LIMITED', message: '导入过于频繁，请 1 小时后再试' } }
 });
 // ===== 修复结束 =====
