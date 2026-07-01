@@ -60,7 +60,9 @@ router.get('/:id', asyncHandler(async (req, res) => {
   const params = isAdmin ? [id] : [id, req.user.id];
   const client = db.prepare(sql).get(...params);
   if (!client) throw notFound('客户不存在');
-  const notes = db.prepare('SELECT * FROM client_notes WHERE client_id = ? ORDER BY created_at DESC').all(id);
+  const notes = db.prepare(
+    'SELECT * FROM client_notes WHERE client_id = ? AND deleted_at IS NULL ORDER BY created_at DESC'
+  ).all(id);
   res.json(success({ ...client, notes }));
 }));
 
@@ -142,8 +144,11 @@ router.delete('/:id', asyncHandler(async (req, res) => {
 
 router.get('/:id/notes', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
+  if (!id) throw badRequest('无效的 ID');
   const db = getDb();
-  const notes = db.prepare('SELECT * FROM client_notes WHERE client_id = ? ORDER BY created_at DESC').all(id);
+  const notes = db.prepare(
+    'SELECT * FROM client_notes WHERE client_id = ? AND deleted_at IS NULL ORDER BY created_at DESC'
+  ).all(id);
   res.json(success(notes));
 }));
 
@@ -177,13 +182,19 @@ router.put('/:id/notes/:nid', asyncHandler(async (req, res) => {
 
 router.delete('/:id/notes/:nid', asyncHandler(async (req, res) => {
   const nid = parseInt(req.params.nid);
+  if (!nid) throw badRequest('无效的 ID');
   const db = getDb();
   const before = db.prepare('SELECT * FROM client_notes WHERE id = ?').get(nid);
-  if (!before) throw notFound('备注不存在');
+  if (!before || before.deleted_at) throw notFound('备注不存在');
+  // ===== P1-NEW-2 修复：权限检查（已存在）+ 软删替代硬删 =====
   if (req.user.role !== 'admin' && before.user_id !== req.user.id) {
     throw notFound('备注不存在或无权操作');
   }
-  db.prepare('DELETE FROM client_notes WHERE id = ?').run(nid);
+  // ===== 修复结束 =====
+  const result = db.prepare(
+    `UPDATE client_notes SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL`
+  ).run(nid);
+  if (result.changes === 0) throw notFound('备注不存在或无权操作');
   auditService.log(req.user.id, 'DELETE_client_note', 'client_note', nid, null, req.ip);
   res.json(success({ id: nid, deleted: true }));
 }));

@@ -333,6 +333,14 @@ function createTables() {
   safeExec('ALTER TABLE candidate_tags ADD COLUMN user_id INTEGER');
   safeExec('ALTER TABLE candidate_tags ADD COLUMN deleted_at TEXT');
 
+  // ===== P1-NEW-2 修复：client_notes 加 deleted_at + user_id + 索引 =====
+  // 原表 client_notes 只有 id/client_id/client_name/content/follow_up/created_at，
+  // 没有 deleted_at（无法软删）和 user_id（顾问 B 能查顾问 A 的备注）。
+  // 这里补 ALTER（safeExec 兜底 duplicate column，老库已存在则跳过）。
+  safeExec('ALTER TABLE client_notes ADD COLUMN user_id INTEGER');
+  safeExec('ALTER TABLE client_notes ADD COLUMN deleted_at TEXT');
+  // ===== 修复结束 =====
+
   // ===== P0-3 修复：user 表加 tokens_invalidated_after 列 =====
   // 用于改密后强制撤销之前签发的所有 JWT token；老库会自动添加（NULL 时跳过校验）。
   safeExec('ALTER TABLE users ADD COLUMN tokens_invalidated_after TEXT');
@@ -378,6 +386,10 @@ function createTables() {
     CREATE INDEX IF NOT EXISTS idx_clients_deleted ON clients(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_clients_status ON clients(status);
     CREATE INDEX IF NOT EXISTS idx_clients_updated ON clients(updated_at DESC);
+    -- P1-NEW-2 修复：client_notes 索引
+    CREATE INDEX IF NOT EXISTS idx_client_notes_client ON client_notes(client_id);
+    CREATE INDEX IF NOT EXISTS idx_client_notes_deleted ON client_notes(deleted_at);
+    CREATE INDEX IF NOT EXISTS idx_client_notes_user ON client_notes(user_id);
     CREATE INDEX IF NOT EXISTS idx_jobs_owner ON jobs(owner_user_id);
     CREATE INDEX IF NOT EXISTS idx_jobs_deleted ON jobs(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
