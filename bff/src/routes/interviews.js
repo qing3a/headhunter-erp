@@ -92,14 +92,20 @@ router.post('/', (req, res) => {
   res.json(success(row));
 });
 
-router.put('/:id', (req, res) => {
-  const { id } = req.params;
-  const body = req.body || {};
+const asyncHandler = require('../utils/asyncHandler');
 
+router.put('/:id', asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id) throw badRequest('无效的 ID');
   const db = getDb();
   const before = db.prepare('SELECT * FROM interviews WHERE id = ?').get(id);
-  if (!before) throw notFound('面试不存在');
-
+  if (!before || before.deleted_at) throw notFound('面试不存在');
+  // ===== P0-NEW-4 修复：先 SELECT 验证权限（绕过 sql.js 谓词 bug）=====
+  if (req.user.role !== 'admin' && before.user_id !== req.user.id) {
+    throw notFound('面试不存在或无权操作');
+  }
+  // ===== 修复结束 =====
+  const body = req.body || {};
   const next = {
     candidate_name: body.candidate_name !== undefined ? body.candidate_name : before.candidate_name,
     job_title: body.job_title !== undefined ? body.job_title : before.job_title,
@@ -112,13 +118,12 @@ router.put('/:id', (req, res) => {
     candidate_id: body.candidate_id !== undefined ? body.candidate_id : before.candidate_id,
     job_id: body.job_id !== undefined ? body.job_id : before.job_id,
   };
-
   const result = db.prepare(`
     UPDATE interviews
     SET candidate_name = ?, job_title = ?, client_name = ?, interviewer = ?,
         scheduled_at = ?, type = ?, status = ?, note = ?, candidate_id = ?, job_id = ?,
         updated_at = datetime('now')
-    WHERE id = ? AND (user_id = ? OR ? = 'admin') AND deleted_at IS NULL
+    WHERE id = ? AND deleted_at IS NULL
   `).run(
     next.candidate_name,
     next.job_title,
@@ -130,31 +135,32 @@ router.put('/:id', (req, res) => {
     next.note,
     next.candidate_id,
     next.job_id,
-    id,
-    req.user.id,
-    req.user.role
+    id
   );
   if (result.changes === 0) throw notFound('面试不存在或无权操作');
-
   const row = db.prepare('SELECT * FROM interviews WHERE id = ?').get(id);
-  auditService.log(req.user.id, 'UPDATE_interview', 'interview', Number(id), { before, after: row }, req.ip);
+  auditService.log(req.user.id, 'UPDATE_interview', 'interview', id, { before, after: row }, req.ip);
   res.json(success(row));
-});
+}));
 
-router.delete('/:id', (req, res) => {
-  const { id } = req.params;
+router.delete('/:id', asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id) throw badRequest('无效的 ID');
   const db = getDb();
   const before = db.prepare('SELECT * FROM interviews WHERE id = ?').get(id);
-  if (!before) throw notFound('面试不存在');
-
+  if (!before || before.deleted_at) throw notFound('面试不存在');
+  // ===== P0-NEW-4 修复：先 SELECT 验证权限 =====
+  if (req.user.role !== 'admin' && before.user_id !== req.user.id) {
+    throw notFound('面试不存在或无权操作');
+  }
+  // ===== 修复结束 =====
   const result = db.prepare(`
     UPDATE interviews SET deleted_at = datetime('now')
-    WHERE id = ? AND (user_id = ? OR ? = 'admin') AND deleted_at IS NULL
-  `).run(id, req.user.id, req.user.role);
+    WHERE id = ? AND deleted_at IS NULL
+  `).run(id);
   if (result.changes === 0) throw notFound('面试不存在或无权操作');
-
-  auditService.log(req.user.id, 'DELETE_interview', 'interview', Number(id), null, req.ip);
-  res.json(success({ id: Number(id), deleted: true }));
-});
+  auditService.log(req.user.id, 'DELETE_interview', 'interview', id, null, req.ip);
+  res.json(success({ id, deleted: true }));
+}));
 
 module.exports = router;

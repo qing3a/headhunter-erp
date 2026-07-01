@@ -3,6 +3,7 @@ const { requireAuth } = require('../middleware/auth');
 const { success, pagination } = require('../utils/response');
 const { notFound, badRequest } = require('../utils/errors');
 const auditService = require('../services/auditService');
+const asyncHandler = require('../utils/asyncHandler');
 const { getDb } = require('../db/init');
 
 const router = express.Router();
@@ -62,14 +63,18 @@ router.post('/', (req, res) => {
   res.json(success(row));
 });
 
-router.put('/:id', (req, res) => {
-  const { id } = req.params;
-  const body = req.body || {};
+router.put('/:id', asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id) throw badRequest('无效的 ID');
   const db = getDb();
-
   const before = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
   if (!before) throw notFound('任务不存在');
-
+  // ===== P0-NEW-4 修复：先 SELECT 验证权限 =====
+  if (req.user.role !== 'admin' && before.user_id !== req.user.id) {
+    throw notFound('任务不存在或无权操作');
+  }
+  // ===== 修复结束 =====
+  const body = req.body || {};
   const next = {
     title: body.title !== undefined ? body.title : before.title,
     desc: body.desc !== undefined ? body.desc : before.desc,
@@ -77,34 +82,36 @@ router.put('/:id', (req, res) => {
     status: body.status !== undefined ? body.status : before.status,
     due_date: body.due_date !== undefined ? body.due_date : before.due_date,
   };
-
   const result = db.prepare(`
     UPDATE tasks
     SET title = ?, "desc" = ?, priority = ?, status = ?, due_date = ?,
         updated_at = datetime('now')
-    WHERE id = ? AND (user_id = ? OR ? = 'admin') AND deleted_at IS NULL
-  `).run(next.title, next.desc, next.priority, next.status, next.due_date, id, req.user.id, req.user.role);
+    WHERE id = ? AND deleted_at IS NULL
+  `).run(next.title, next.desc, next.priority, next.status, next.due_date, id);
   if (result.changes === 0) throw notFound('任务不存在或无权操作');
-
   const row = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
-  auditService.log(req.user.id, 'UPDATE_task', 'task', Number(id), { before, after: row }, req.ip);
+  auditService.log(req.user.id, 'UPDATE_task', 'task', id, { before, after: row }, req.ip);
   res.json(success(row));
-});
+}));
 
-router.delete('/:id', (req, res) => {
-  const { id } = req.params;
+router.delete('/:id', asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id) throw badRequest('无效的 ID');
   const db = getDb();
   const before = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
   if (!before) throw notFound('任务不存在');
-
+  // ===== P0-NEW-4 修复：先 SELECT 验证权限 =====
+  if (req.user.role !== 'admin' && before.user_id !== req.user.id) {
+    throw notFound('任务不存在或无权操作');
+  }
+  // ===== 修复结束 =====
   const result = db.prepare(`
     UPDATE tasks SET deleted_at = datetime('now')
-    WHERE id = ? AND (user_id = ? OR ? = 'admin') AND deleted_at IS NULL
-  `).run(id, req.user.id, req.user.role);
+    WHERE id = ? AND deleted_at IS NULL
+  `).run(id);
   if (result.changes === 0) throw notFound('任务不存在或无权操作');
-
-  auditService.log(req.user.id, 'DELETE_task', 'task', Number(id), null, req.ip);
-  res.json(success({ id: Number(id), deleted: true }));
-});
+  auditService.log(req.user.id, 'DELETE_task', 'task', id, null, req.ip);
+  res.json(success({ id, deleted: true }));
+}));
 
 module.exports = router;
