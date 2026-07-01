@@ -17,9 +17,13 @@ function writeLog(userId, action, resourceType, resourceId, detail, ip) {
   }
 }
 
+// ===== P1-NEW-4 修复：log 改为同步写入（不再 setImmediate）=====
+// 原异步写法导致进程崩溃时 audit 丢失。sql.js 是同步 API，写入是同步操作，
+// 改成同步后所有路由调用 auditService.log(...) 立即落库，res.json 之前已完成。
 function log(userId, action, resourceType, resourceId, detail, ip) {
-  setImmediate(() => writeLog(userId, action, resourceType, resourceId, detail, ip));
+  writeLog(userId, action, resourceType, resourceId, detail, ip);
 }
+// ===== 修复结束 =====
 
 function list({ userId, action, page, pageSize } = {}) {
   const db = getDb();
@@ -56,4 +60,4 @@ function cleanupOldAudit(daysOld) {
 }
 // ===== 修复结束 =====
 
-module.exports = { log, list, writeLog, cleanupOldAudit };
+module.exports = { log, list, writeLog: log, cleanupOldAudit };
