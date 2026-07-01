@@ -362,6 +362,12 @@ function createTables() {
     CREATE INDEX IF NOT EXISTS idx_tasks_deleted ON tasks(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_candidate_tags_user ON candidate_tags(user_id);
     CREATE INDEX IF NOT EXISTS idx_candidate_tags_deleted ON candidate_tags(deleted_at);
+    -- ===== P1-NEW-3 修复：candidate_tags 加 candidate_id 索引 =====
+    -- 其他子表（experiences/educations/contacts/recs）都有 _candidate 索引，
+    -- 唯独 candidate_tags 漏了；candidate_id 是 INTEGER PRIMARY KEY，但 B-tree
+    -- 索引查找需要显式声明才能命中（sql.js 弱类型 WHERE 字符串不会自动走索引）
+    CREATE INDEX IF NOT EXISTS idx_candidate_tags_candidate ON candidate_tags(candidate_id);
+    -- ===== 修复结束 =====
     CREATE INDEX IF NOT EXISTS idx_candidates_user ON candidates(user_id);
     CREATE INDEX IF NOT EXISTS idx_candidates_deleted ON candidates(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_candidates_status ON candidates(status);

@@ -384,32 +384,34 @@ router.put('/:id/tags', asyncHandler(async (req, res) => {
   const ratingVal = rating === undefined ? 0 : Number(rating);
   const notesVal = notes === undefined ? '' : String(notes);
 
-  // candidate_id 是 TEXT PK；转为字符串写入
-  const cidStr = String(candidateId);
-  const existing = db.prepare('SELECT candidate_id FROM candidate_tags WHERE candidate_id = ?').get(cidStr);
+  // ===== P1-NEW-3 修复：candidate_id 是 INTEGER PRIMARY KEY，直接传 Number（不要 String()）=====
+  // 之前用 String(candidateId) 强转字符串，sql.js 弱类型 WHERE 能匹配但走 B-tree 不走索引路径；
+  // candidate_tags 表又漏了 idx_candidate_tags_candidate 索引（其他子表都有），导致全表扫描。
+  // 现已补 idx_candidate_tags_candidate，直接传 candidateId（Number）走 INTEGER 索引。
+  const existing = db.prepare('SELECT candidate_id FROM candidate_tags WHERE candidate_id = ?').get(candidateId);
   let before = null;
   if (existing) {
     // ===== P0-NEW-2 修复：乐观锁，version 不匹配时拒 =====
     // 读 tags/rating/notes + version；UPDATE WHERE version = ?，version 不匹配 → 冲突
     const current = db.prepare(
       'SELECT tags, rating, notes, version FROM candidate_tags WHERE candidate_id = ?'
-    ).get(cidStr);
+    ).get(candidateId);
     before = {
       tags: current.tags, rating: current.rating, notes: current.notes, version: current.version
     };
     const result = db.prepare(`
       UPDATE candidate_tags SET tags = ?, rating = ?, notes = ?, version = version + 1, updated_at = datetime('now')
       WHERE candidate_id = ? AND version = ?
-    `).run(tagsJson, ratingVal, notesVal, cidStr, current.version);
+    `).run(tagsJson, ratingVal, notesVal, candidateId, current.version);
     if (result.changes === 0) throw conflict('tags 已被他人修改，请刷新');
     // ===== 修复结束 =====
   } else {
     db.prepare(`
       INSERT INTO candidate_tags (candidate_id, tags, rating, notes, user_id) VALUES (?, ?, ?, ?, ?)
-    `).run(cidStr, tagsJson, ratingVal, notesVal, req.user.id);
+    `).run(candidateId, tagsJson, ratingVal, notesVal, req.user.id);
   }
 
-  const row = db.prepare('SELECT tags, rating, notes, updated_at FROM candidate_tags WHERE candidate_id = ?').get(cidStr);
+  const row = db.prepare('SELECT tags, rating, notes, updated_at FROM candidate_tags WHERE candidate_id = ?').get(candidateId);
   auditService.log(req.user.id, 'UPDATE_candidate_tags', 'candidate', candidateId, { before, after: { tags: JSON.parse(tagsJson), rating: ratingVal, notes: notesVal } }, req.ip);
   res.json(success({
     candidate_id: candidateId,
