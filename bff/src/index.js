@@ -24,7 +24,9 @@ const app = express();
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 
-app.set('trust proxy', 1);
+// ===== P0-NEW-1 修复：trust proxy 限制为 loopback，避免伪造 X-Forwarded-For =====
+app.set('trust proxy', 'loopback');
+// ===== 修复结束 =====
 
 app.use('/shared', express.static(path.join(projectRoot, 'shared'), { maxAge: '1h' }));
 app.use('/partials', express.static(path.join(projectRoot, 'partials'), { maxAge: '1h' }));
