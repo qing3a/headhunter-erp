@@ -832,6 +832,10 @@
           renderRecommendations(current.recommendations || []);
           renderTimeline(current);
         });
+        // ===== P1-NEW-5 修复：子表分页加载（默认前 50 条 + 配合"加载更多"按钮）=====
+        window.API.candidates.listExperiences(candidateId, { limit: 50, offset: 0 });
+        window.API.candidates.listEducations(candidateId, { limit: 50, offset: 0 });
+        window.API.candidates.listContacts(candidateId, { limit: 50, offset: 0 });
       }
 
       function bindEvents() {

@@ -181,15 +181,24 @@
     updateTags: function(id, data) {
       return api._request('/candidates/' + encodeURIComponent(id) + '/tags', { method: 'PUT', body: data }).then(function(r) { return api._unwrap(r); });
     },
-    listExperiences: function(id) { return api._request('/candidates/' + encodeURIComponent(id) + '/experiences').then(function(r) { return api._unwrap(r); }); },
+    listExperiences: function(id, options) {
+      var qs = buildQuery({ limit: options && options.limit, offset: options && options.offset });
+      return api._request('/candidates/' + encodeURIComponent(id) + '/experiences' + qs).then(function(r) { return api._unwrap(r); });
+    },
     createExperience: function(id, data) { return api._request('/candidates/' + encodeURIComponent(id) + '/experiences', { method: 'POST', body: data }).then(function(r) { return api._unwrap(r); }); },
     updateExperience: function(id, eid, data) { return api._request('/candidates/' + encodeURIComponent(id) + '/experiences/' + encodeURIComponent(eid), { method: 'PUT', body: data }).then(function(r) { return api._unwrap(r); }); },
     removeExperience: function(id, eid) { return api._request('/candidates/' + encodeURIComponent(id) + '/experiences/' + encodeURIComponent(eid), { method: 'DELETE' }).then(function(r) { return api._unwrap(r); }); },
-    listEducations: function(id) { return api._request('/candidates/' + encodeURIComponent(id) + '/educations').then(function(r) { return api._unwrap(r); }); },
+    listEducations: function(id, options) {
+      var qs = buildQuery({ limit: options && options.limit, offset: options && options.offset });
+      return api._request('/candidates/' + encodeURIComponent(id) + '/educations' + qs).then(function(r) { return api._unwrap(r); });
+    },
     createEducation: function(id, data) { return api._request('/candidates/' + encodeURIComponent(id) + '/educations', { method: 'POST', body: data }).then(function(r) { return api._unwrap(r); }); },
     updateEducation: function(id, eid, data) { return api._request('/candidates/' + encodeURIComponent(id) + '/educations/' + encodeURIComponent(eid), { method: 'PUT', body: data }).then(function(r) { return api._unwrap(r); }); },
     removeEducation: function(id, eid) { return api._request('/candidates/' + encodeURIComponent(id) + '/educations/' + encodeURIComponent(eid), { method: 'DELETE' }).then(function(r) { return api._unwrap(r); }); },
-    listContacts: function(id) { return api._request('/candidates/' + encodeURIComponent(id) + '/contacts').then(function(r) { return api._unwrap(r); }); },
+    listContacts: function(id, options) {
+      var qs = buildQuery({ limit: options && options.limit, offset: options && options.offset });
+      return api._request('/candidates/' + encodeURIComponent(id) + '/contacts' + qs).then(function(r) { return api._unwrap(r); });
+    },
     createContact: function(id, data) { return api._request('/candidates/' + encodeURIComponent(id) + '/contacts', { method: 'POST', body: data }).then(function(r) { return api._unwrap(r); }); },
     updateContact: function(id, cid, data) { return api._request('/candidates/' + encodeURIComponent(id) + '/contacts/' + encodeURIComponent(cid), { method: 'PUT', body: data }).then(function(r) { return api._unwrap(r); }); },
     removeContact: function(id, cid) { return api._request('/candidates/' + encodeURIComponent(id) + '/contacts/' + encodeURIComponent(cid), { method: 'DELETE' }).then(function(r) { return api._unwrap(r); }); },
