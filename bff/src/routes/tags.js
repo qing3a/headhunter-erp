@@ -50,14 +50,17 @@ router.get('/', asyncHandler(async (req, res) => {
   res.json(success(tags));
 }));
 
+// ===== P1-NEW-8 修复：tag 精确匹配（instr 找 JSON 字符串里的引号包围 tag）=====
+// JSON 数组里 tag 必然前后是双引号：["tag1","tag2"] 找 "tag1" → instr 命中
+// 避免 LIKE '%"tag"%' 误匹配 "tag1前后" / "tag2X" 等子串
 router.get('/:name/candidates', asyncHandler(async (req, res) => {
   const tagName = decodeURIComponent(req.params.name);
   const isAdmin = req.user.role === 'admin';
   const db = getDb();
   const where = isAdmin
-    ? "ct.deleted_at IS NULL AND ct.tags LIKE ?"
-    : "ct.deleted_at IS NULL AND ct.user_id = ? AND ct.tags LIKE ?";
-  const params = isAdmin ? ['%"' + tagName + '"%'] : [req.user.id, '%"' + tagName + '"%'];
+    ? "ct.deleted_at IS NULL AND instr(ct.tags, ?) > 0"
+    : "ct.deleted_at IS NULL AND ct.user_id = ? AND instr(ct.tags, ?) > 0";
+  const params = isAdmin ? ['"' + tagName + '"'] : [req.user.id, '"' + tagName + '"'];
   const rows = db.prepare(
     `SELECT c.id, c.name, c.current_position, c.current_company, c.status, c.current_city
      FROM candidates c
@@ -77,9 +80,9 @@ router.put('/:tag/rename', withTagsLock(async (req, res) => {
   const isAdmin = req.user.role === 'admin';
   const db = getDb();
   const where = isAdmin
-    ? 'deleted_at IS NULL AND tags LIKE ?'
-    : 'deleted_at IS NULL AND user_id = ? AND tags LIKE ?';
-  const params = isAdmin ? ['%"' + oldName + '"%'] : [req.user.id, '%"' + oldName + '"%'];
+    ? 'deleted_at IS NULL AND instr(tags, ?) > 0'
+    : 'deleted_at IS NULL AND user_id = ? AND instr(tags, ?) > 0';
+  const params = isAdmin ? ['"' + oldName + '"'] : [req.user.id, '"' + oldName + '"'];
   // ===== P0-NEW-2 修复：SELECT 读 version 字段 =====
   const rows = db.prepare('SELECT candidate_id, tags, version FROM candidate_tags WHERE ' + where).all(...params);
   let changed = 0;
@@ -113,9 +116,9 @@ router.delete('/:tag', withTagsLock(async (req, res) => {
   const isAdmin = req.user.role === 'admin';
   const db = getDb();
   const where = isAdmin
-    ? 'deleted_at IS NULL AND tags LIKE ?'
-    : 'deleted_at IS NULL AND user_id = ? AND tags LIKE ?';
-  const params = isAdmin ? ['%"' + tagName + '"%'] : [req.user.id, '%"' + tagName + '"%'];
+    ? 'deleted_at IS NULL AND instr(tags, ?) > 0'
+    : 'deleted_at IS NULL AND user_id = ? AND instr(tags, ?) > 0';
+  const params = isAdmin ? ['"' + tagName + '"'] : [req.user.id, '"' + tagName + '"'];
   // ===== P0-NEW-2 修复：SELECT 读 version 字段 =====
   const rows = db.prepare('SELECT candidate_id, tags, version FROM candidate_tags WHERE ' + where).all(...params);
   let removed = 0;
@@ -161,8 +164,8 @@ router.post('/merge', withTagsLock(async (req, res) => {
   let totalUpdated = 0;
   for (let i = 1; i < allFroms.length; i++) {
     const oldName = allFroms[i];
-    const like = '%"' + oldName + '"%';
-    const where = isAdmin ? 'deleted_at IS NULL AND tags LIKE ?' : 'deleted_at IS NULL AND user_id = ? AND tags LIKE ?';
+    const like = '"' + oldName + '"';
+    const where = isAdmin ? 'deleted_at IS NULL AND instr(tags, ?) > 0' : 'deleted_at IS NULL AND user_id = ? AND instr(tags, ?) > 0';
     const params = isAdmin ? [like] : [req.user.id, like];
     // ===== P0-NEW-2 修复：SELECT 读 version 字段 =====
     const rows = db.prepare('SELECT candidate_id, tags, version FROM candidate_tags WHERE ' + where).all(...params);
@@ -187,8 +190,8 @@ router.post('/merge', withTagsLock(async (req, res) => {
       }
     });
   }
-  const like2 = '%"' + base + '"%';
-  const where2 = isAdmin ? 'deleted_at IS NULL AND tags LIKE ?' : 'deleted_at IS NULL AND user_id = ? AND tags LIKE ?';
+  const like2 = '"' + base + '"';
+  const where2 = isAdmin ? 'deleted_at IS NULL AND instr(tags, ?) > 0' : 'deleted_at IS NULL AND user_id = ? AND instr(tags, ?) > 0';
   const params2 = isAdmin ? [like2] : [req.user.id, like2];
   // ===== P0-NEW-2 修复：SELECT 读 version 字段 =====
   const rows2 = db.prepare('SELECT candidate_id, tags, version FROM candidate_tags WHERE ' + where2).all(...params2);
