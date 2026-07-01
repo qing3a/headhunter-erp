@@ -159,121 +159,6 @@
     list: function(params) {
       params = params || {};
       var qs = buildQuery({
-        keyword: params.keyword,
-        status: params.status,
-        city: params.city,
-        source_channel: params.source_channel,
-        years_min: params.years_min,
-        years_max: params.years_max,
-        education_level: params.education_level,
-        industry: params.industry,
-        salary_min: params.salary_min,
-        salary_max: params.salary_max,
-        tag: params.tag,
-        has_recommendation: params.has_recommendation,
-        sort: params.sort,
-        includeDeleted: params.includeDeleted,
-        page: params.page,
-        pageSize: params.pageSize
-      });
-      return api._request('/candidates' + qs).then(function(r) { return api._unwrap(r); });
-    },
-    get: function(id) {
-      return api._request('/candidates/' + encodeURIComponent(id)).then(function(r) { return api._unwrap(r); });
-    },
-    create: function(data) {
-      return api._request('/candidates', { method: 'POST', body: data }).then(function(r) { return api._unwrap(r); });
-    },
-    update: function(id, data) {
-      return api._request('/candidates/' + encodeURIComponent(id), { method: 'PUT', body: data }).then(function(r) { return api._unwrap(r); });
-    },
-    remove: function(id) {
-      return api._request('/candidates/' + encodeURIComponent(id), { method: 'DELETE' }).then(function(r) { return api._unwrap(r); });
-    },
-    checkEmail: function(email, excludeId) {
-      var qs = buildQuery({ email: email, id: excludeId });
-      return api._request('/candidates/check-email' + qs).then(function(r) { return api._unwrap(r); });
-    },
-    updateTags: function(id, data) {
-      return api._request('/candidates/' + encodeURIComponent(id) + '/tags', { method: 'PUT', body: data }).then(function(r) { return api._unwrap(r); });
-    },
-    // 工作经历
-    listExperiences: function(id) {
-      return api._request('/candidates/' + encodeURIComponent(id) + '/experiences').then(function(r) { return api._unwrap(r); });
-    },
-    createExperience: function(id, data) {
-      return api._request('/candidates/' + encodeURIComponent(id) + '/experiences', { method: 'POST', body: data }).then(function(r) { return api._unwrap(r); });
-    },
-    updateExperience: function(id, eid, data) {
-      return api._request('/candidates/' + encodeURIComponent(id) + '/experiences/' + encodeURIComponent(eid), { method: 'PUT', body: data }).then(function(r) { return api._unwrap(r); });
-    },
-    removeExperience: function(id, eid) {
-      return api._request('/candidates/' + encodeURIComponent(id) + '/experiences/' + encodeURIComponent(eid), { method: 'DELETE' }).then(function(r) { return api._unwrap(r); });
-    },
-    // 教育背景
-    listEducations: function(id) {
-      return api._request('/candidates/' + encodeURIComponent(id) + '/educations').then(function(r) { return api._unwrap(r); });
-    },
-    createEducation: function(id, data) {
-      return api._request('/candidates/' + encodeURIComponent(id) + '/educations', { method: 'POST', body: data }).then(function(r) { return api._unwrap(r); });
-    },
-    updateEducation: function(id, eid, data) {
-      return api._request('/candidates/' + encodeURIComponent(id) + '/educations/' + encodeURIComponent(eid), { method: 'PUT', body: data }).then(function(r) { return api._unwrap(r); });
-    },
-    removeEducation: function(id, eid) {
-      return api._request('/candidates/' + encodeURIComponent(id) + '/educations/' + encodeURIComponent(eid), { method: 'DELETE' }).then(function(r) { return api._unwrap(r); });
-    },
-    // 联系记录
-    listContacts: function(id) {
-      return api._request('/candidates/' + encodeURIComponent(id) + '/contacts').then(function(r) { return api._unwrap(r); });
-    },
-    createContact: function(id, data) {
-      return api._request('/candidates/' + encodeURIComponent(id) + '/contacts', { method: 'POST', body: data }).then(function(r) { return api._unwrap(r); });
-    },
-    updateContact: function(id, cid, data) {
-      return api._request('/candidates/' + encodeURIComponent(id) + '/contacts/' + encodeURIComponent(cid), { method: 'PUT', body: data }).then(function(r) { return api._unwrap(r); });
-    },
-    removeContact: function(id, cid) {
-      return api._request('/candidates/' + encodeURIComponent(id) + '/contacts/' + encodeURIComponent(cid), { method: 'DELETE' }).then(function(r) { return api._unwrap(r); });
-    }
-  });
-
-  api.jobs = makeNs({
-    list: function(params) {
-      params = params || {};
-      var qs = buildQuery({
-        keyword: params.keyword, status: params.status,
-        city: params.city, industry: params.industry,
-        owner_only: params.owner_only, includeDeleted: params.includeDeleted,
-        page: params.page, pageSize: params.pageSize
-      });
-      return api._request('/jobs' + qs).then(function(r) { return api._unwrap(r); });
-    },
-    get: function(id) {
-      return api._request('/jobs/' + encodeURIComponent(id)).then(function(r) { return api._unwrap(r); });
-    },
-    create: function(data) {
-      return api._request('/jobs', { method: 'POST', body: data }).then(function(r) { return api._unwrap(r); });
-    },
-    update: function(id, data) {
-      return api._request('/jobs/' + encodeURIComponent(id), { method: 'PUT', body: data }).then(function(r) { return api._unwrap(r); });
-    },
-    remove: function(id) {
-      return api._request('/jobs/' + encodeURIComponent(id), { method: 'DELETE' }).then(function(r) { return api._unwrap(r); });
-    },
-    lookup: function(keyword) {
-      var qs = buildQuery({ keyword: keyword });
-      return api._request('/jobs/lookup' + qs).then(function(r) { return api._unwrap(r); });
-    },
-    syncFromPlatform: function() {
-      return api._request('/jobs/sync-from-platform').then(function(r) { return api._unwrap(r); });
-    }
-  });
-
-  api.candidates = makeNs({
-    list: function(params) {
-      params = params || {};
-      var qs = buildQuery({
         keyword: params.keyword, status: params.status,
         city: params.city, source_channel: params.source_channel,
         years_min: params.years_min, years_max: params.years_max,
@@ -310,6 +195,38 @@
     removeContact: function(id, cid) { return api._request('/candidates/' + encodeURIComponent(id) + '/contacts/' + encodeURIComponent(cid), { method: 'DELETE' }).then(function(r) { return api._unwrap(r); }); },
     batchAction: function(action, ids, params) {
       return api._request('/candidates/batch', { method: 'POST', body: { action: action, ids: ids, params: params || {} } }).then(function(r) { return api._unwrap(r); });
+    }
+  });
+
+  api.jobs = makeNs({
+    list: function(params) {
+      params = params || {};
+      var qs = buildQuery({
+        keyword: params.keyword, status: params.status,
+        city: params.city, industry: params.industry,
+        owner_only: params.owner_only, includeDeleted: params.includeDeleted,
+        page: params.page, pageSize: params.pageSize
+      });
+      return api._request('/jobs' + qs).then(function(r) { return api._unwrap(r); });
+    },
+    get: function(id) {
+      return api._request('/jobs/' + encodeURIComponent(id)).then(function(r) { return api._unwrap(r); });
+    },
+    create: function(data) {
+      return api._request('/jobs', { method: 'POST', body: data }).then(function(r) { return api._unwrap(r); });
+    },
+    update: function(id, data) {
+      return api._request('/jobs/' + encodeURIComponent(id), { method: 'PUT', body: data }).then(function(r) { return api._unwrap(r); });
+    },
+    remove: function(id) {
+      return api._request('/jobs/' + encodeURIComponent(id), { method: 'DELETE' }).then(function(r) { return api._unwrap(r); });
+    },
+    lookup: function(keyword) {
+      var qs = buildQuery({ keyword: keyword });
+      return api._request('/jobs/lookup' + qs).then(function(r) { return api._unwrap(r); });
+    },
+    syncFromPlatform: function() {
+      return api._request('/jobs/sync-from-platform').then(function(r) { return api._unwrap(r); });
     }
   });
 
