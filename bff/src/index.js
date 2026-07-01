@@ -76,7 +76,7 @@ app.use('/api/v1', routes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-db.init().then(() => {
+db.init().then(async () => {
   app.listen(config.port, () => {
     console.log(`\n🚀 ERP BFF running on http://localhost:${config.port}`);
     console.log(`📊 API base: http://localhost:${config.port}/api/v1`);
@@ -90,7 +90,8 @@ db.init().then(() => {
   if (String(process.env.REMINDER_SCAN || 'true').toLowerCase() !== 'false') {
     try {
       const recRouter = require('./routes/recommendations');
-      const result = recRouter.scanOverdueRecommendations();
+      // ===== P0-NEW-3 修复：await 启动 scan（函数现在返回 Promise + mutex 串行化）=====
+      const result = await recRouter.scanOverdueRecommendations();
       if (result.processed > 0) {
         console.log(`⏰ Reminder scan: ${result.processed} overdue recommendation(s) processed, ${result.tasks_created} follow-up task(s) created`);
       } else {

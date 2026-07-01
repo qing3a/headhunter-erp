@@ -10,6 +10,17 @@ const { getDb } = require('../db/init');
 const router = express.Router();
 router.use(requireAuth);
 
+// ===== P0-NEW-3 修复：scan mutex，防止启动自动 scan 与手动 scan 撞车 =====
+// 两个入口都查 status='recommended' 的 overdue 推荐；
+// 没有 mutex 时同一行会被 UPDATE + INSERT history + INSERT task 两遍
+// 用全局 Promise 链串行化（sql.js 单进程，进程内锁够用）
+let scanQueue = Promise.resolve();
+function withScanLock(fn) {
+  const run = scanQueue.then(fn, fn);
+  scanQueue = run.catch(() => {});
+  return run;
+}
+
 const STATUS_VALUES = ['recommended', 'pending_feedback', 'interviewing', 'offered', 'hired', 'rejected', 'withdrawn'];
 
 const VALID_TRANSITIONS = {
@@ -104,7 +115,7 @@ router.get('/overdue', asyncHandler(async (req, res) => {
  * 规则：status=recommended AND recommend_at < 3 天前 → 改 pending_feedback + 写 history + 创建 task
  */
 router.post('/scan-overdue', requireRole('admin'), asyncHandler(async (req, res) => {
-  const result = scanOverdueRecommendations();
+  const result = await scanOverdueRecommendations();
   res.json(success({ processed: result.processed, tasks_created: result.tasks_created }));
 }));
 
@@ -286,7 +297,11 @@ router.delete('/:id', asyncHandler(async (req, res) => {
 }));
 
 // 导出供 BFF 启动时调用
+// ===== P0-NEW-3 修复：包一层 mutex，串行化多次 scan 调用 =====
 function scanOverdueRecommendations() {
+  return withScanLock(_scanOverdueImpl);
+}
+function _scanOverdueImpl() {
   const db = getDb();
   const threeDaysAgo = new Date(Date.now() - 3 * 86400 * 1000).toISOString();
   // ===== P1-2 修复：用 COALESCE(last_status_change_at, recommend_at) 兼容老数据 =====
