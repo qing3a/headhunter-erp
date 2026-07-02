@@ -30,6 +30,8 @@ app.set('trust proxy', 'loopback');
 
 app.use('/shared', express.static(path.join(projectRoot, 'shared'), { maxAge: '1h' }));
 app.use('/partials', express.static(path.join(projectRoot, 'partials'), { maxAge: '1h' }));
+// Phase 3: esbuild 输出优先（bff/public/pages），原 pages 目录作为 fallback
+app.use('/pages', express.static(path.join(__dirname, '..', 'public', 'pages'), { maxAge: '1h', extensions: ['html'] }));
 app.use('/pages', express.static(path.join(projectRoot, 'pages'), { maxAge: 0, extensions: ['html'] }));
 
 app.use(helmet({

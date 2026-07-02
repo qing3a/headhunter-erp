@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>候选人详情</title>
+  <link rel="stylesheet" href="../shared/shared.css">
+  <script src="../shared/auth.js"></script>
+  <script src="../shared/menu-config.js"></script>
+  <script src="../shared/loading.js"></script>
+  <script src="../shared/router.js"></script>
+  <script src="../shared/api.js"></script>
+  <script src="../shared/candidate-form.js"></script>
+  <style id="pageStyle">
+    .profile-header { display: flex; gap: 20px; align-items: flex-start; background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; padding: 24px; margin-bottom: 16px; }
+    .profile-header .avatar-block { flex-shrink: 0; }
+    .profile-header .info-block { flex: 1; min-width: 0; }
+    .profile-header h1 { margin: 0 0 4px 0; font-size: 22px; font-weight: 600; }
+    .profile-header .meta { color: var(--color-text-secondary); font-size: 14px; margin-bottom: 8px; }
+    .profile-header .tags-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .profile-header .actions { flex-shrink: 0; display: flex; gap: 8px; }
+
+    .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 32px; }
+    .info-grid .info-item .label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+    .info-grid .info-item .value { font-size: 14px; color: var(--color-text-primary); }
+
+    .sub-list { display: flex; flex-direction: column; gap: 12px; }
+    .sub-item { background: var(--color-bg-page-secondary, #f9fafb); border: 1px solid var(--color-border-light); border-radius: 8px; padding: 16px; display: flex; gap: 12px; align-items: flex-start; }
+    .sub-item .sub-content { flex: 1; }
+    .sub-item .sub-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+    .sub-item .sub-meta { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 6px; }
+    .sub-item .sub-desc { font-size: 13px; line-height: 1.6; }
+    .sub-item .sub-actions { flex-shrink: 0; display: flex; gap: 4px; }
+    .sub-item .sub-actions .btn-link { background: none; border: none; color: var(--color-text-secondary); cursor: pointer; font-size: 13px; padding: 4px 8px; }
+    .sub-item .sub-actions .btn-link:hover { color: var(--color-primary); }
+    .sub-item .sub-actions .btn-link.danger:hover { color: #dc2626; }
+
+    .timeline { position: relative; padding-left: 28px; }
+    .timeline::before { content: ''; position: absolute; left: 8px; top: 8px; bottom: 8px; width: 2px; background: var(--color-border-light); }
+    .timeline-item { position: relative; padding-bottom: 20px; }
+    .timeline-item::before { content: ''; position: absolute; left: -24px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--color-primary); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--color-primary); }
+    .timeline-item .time { font-size: 12px; color: var(--color-text-secondary); }
+    .timeline-item .title { font-weight: 500; margin: 2px 0; }
+    .timeline-item .desc { font-size: 13px; color: var(--color-text-secondary); }
+
+    .sub-section { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .sub-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .sub-section-header h3 { margin: 0; font-size: 15px; font-weight: 600; }
+
+    .empty-sub { text-align: center; padding: 40px 20px; color: var(--color-text-secondary); font-size: 13px; }
+
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; background: var(--color-primary-lightest, #CCFBF1); color: var(--color-primary-dark, #0F766E); }
+
+    .form-row { display: flex; gap: 12px; }
+    .form-row .form-group { flex: 1; }
+  </style>
+</head>
+<body>
+  <div id="pageContent">
+    <nav class="breadcrumb">
+      <a href="candidate-pool.html">候选人库</a>
+      <span class="breadcrumb-separator">/</span>
+      <span class="breadcrumb-item active" id="breadName">加载中...</span>
+    </nav>
+
+    <div id="loadingHint" style="padding:60px 20px;text-align:center;color:var(--color-text-secondary);">加载中...</div>
+
+    <div id="detailContainer" style="display:none;">
+      <div class="profile-header">
+        <div class="avatar-block">
+          <div class="avatar avatar-lg" id="profileAvatar" style="width:64px;height:64px;background:var(--color-primary-lightest);color:var(--color-primary-dark);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:600;border-radius:50%;"></div>
+        </div>
+        <div class="info-block">
+          <h1 id="profileName">--</h1>
+          <div class="meta" id="profileMeta">--</div>
+          <div class="tags-row" id="profileTags"></div>
+        </div>
+        <div class="actions">
+          <button id="editBtn" class="btn btn-primary">编辑</button>
+          <button id="deleteBtn" class="btn btn-secondary">删除</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab-item active" data-tab="basic">基本信息</div>
+        <div class="tab-item" data-tab="experience">工作经历 <span class="badge" id="expCount"></span></div>
+        <div class="tab-item" data-tab="education">教育背景 <span class="badge" id="eduCount"></span></div>
+        <div class="tab-item" data-tab="contact">联系记录 <span class="badge" id="contactCount"></span></div>
+        <div class="tab-item" data-tab="recommendation">推荐记录 <span class="badge" id="recCount"></span></div>
+        <div class="tab-item" data-tab="timeline">时间线</div>
+      </div>
+
+      <!-- Tab 1: 基本信息 -->
+      <div class="tab-content active" data-tab-content="basic">
+        <div class="sub-section">
+          <div class="sub-section-header"><h3>个人资料</h3></div>
+          <div class="info-grid" id="basicInfo"></div>
+        </div>
+        <div class="sub-section">
+          <div class="sub-section-header"><h3>求职意向</h3></div>
+          <div class="info-grid" id="jobIntention"></div>
+        </div>
+        <div class="sub-section">
+          <div class="sub-section-header"><h3>来源与备注</h3></div>
+          <div class="info-grid" id="sourceInfo"></div>
+          <div style="margin-top:16px;">
+            <div class="label" style="font-size:12px;color:var(--color-text-secondary);margin-bottom:6px;">备注</div>
+            <div id="notesContent" style="font-size:14px;line-height:1.6;white-space:pre-wrap;">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: 工作经历 -->
+      <div class="tab-content" data-tab-content="experience">
+        <div class="sub-section">
+          <div class="sub-section-header">
+            <h3>工作经历</h3>
+            <button class="btn btn-primary btn-sm" data-action="add-experience">+ 添加工作经历</button>
+          </div>
+          <div class="sub-list" id="experienceList"></div>
+          <div class="load-more-bar" id="expMoreBar" style="display:none;text-align:center;padding:12px;">
+            <button class="btn btn-secondary btn-sm" id="expMoreBtn">加载更多</button>
+            <span id="expMoreHint" style="margin-left:8px;color:var(--color-text-secondary);font-size:12px;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: 教育背景 -->
+      <div class="tab-content" data-tab-content="education">
+        <div class="sub-section">
+          <div class="sub-section-header">
+            <h3>教育背景</h3>
+            <button class="btn btn-primary btn-sm" data-action="add-education">+ 添加教育背景</button>
+          </div>
+          <div class="sub-list" id="educationList"></div>
+          <div class="load-more-bar" id="eduMoreBar" style="display:none;text-align:center;padding:12px;">
+            <button class="btn btn-secondary btn-sm" id="eduMoreBtn">加载更多</button>
+            <span id="eduMoreHint" style="margin-left:8px;color:var(--color-text-secondary);font-size:12px;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 4: 联系记录 -->
+      <div class="tab-content" data-tab-content="contact">
+        <div class="sub-section">
+          <div class="sub-section-header">
+            <h3>联系记录</h3>
+            <button class="btn btn-primary btn-sm" data-action="add-contact">+ 添加联系记录</button>
+          </div>
+          <div class="sub-list" id="contactList"></div>
+          <div class="load-more-bar" id="contactMoreBar" style="display:none;text-align:center;padding:12px;">
+            <button class="btn btn-secondary btn-sm" id="contactMoreBtn">加载更多</button>
+            <span id="contactMoreHint" style="margin-left:8px;color:var(--color-text-secondary);font-size:12px;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 5: 推荐记录 -->
+      <div class="tab-content" data-tab-content="recommendation">
+        <div class="sub-section">
+          <div class="sub-section-header">
+            <h3>推荐记录</h3>
+            <button class="btn btn-primary btn-sm" data-action="add-recommendation">+ 推荐给职位</button>
+          </div>
+          <div class="sub-list" id="recommendationList"></div>
+        </div>
+      </div>
+
+      <!-- Tab 6: 时间线 -->
+      <div class="tab-content" data-tab-content="timeline">
+        <div class="sub-section">
+          <div class="sub-section-header"><h3>活动时间线</h3></div>
+          <div class="timeline" id="timelineList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./candidate-detail.js"></script>
+  <script src="../shared/shared.js"></script>
+  <script src="../shared/layout.js"></script>
+</body>
+</html>

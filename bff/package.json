@@ -27,6 +27,7 @@
     "multer": "^2.2.0"
   },
   "devDependencies": {
+    "esbuild": "^0.28.1",
     "happy-dom": "^20.10.6",
     "supertest": "^7.2.2",
     "vitest": "^4.1.9"

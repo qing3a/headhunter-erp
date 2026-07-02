@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>标签管理</title>
+  <link rel="stylesheet" href="../shared/shared.css">
+  <script src="../shared/auth.js"></script>
+  <script src="../shared/loading.js"></script>
+  <script src="../shared/router.js"></script>
+  <script src="../shared/api.js"></script>
+  <style id="pageStyle">
+    .tag-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .tag-toolbar input { flex: 1; max-width: 320px; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 14px; }
+    .tag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+    .tag-card { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px 16px; cursor: pointer; transition: all 0.15s; }
+    .tag-card:hover { border-color: var(--color-primary); box-shadow: 0 2px 8px rgba(13,148,136,0.1); }
+    .tag-card .name { font-size: 15px; font-weight: 500; color: var(--color-primary-dark); margin-bottom: 6px; }
+    .tag-card .count { font-size: 13px; color: var(--color-text-secondary); }
+    .tag-card .actions { display: flex; gap: 4px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--color-border-light); }
+    .tag-card .actions button { flex: 1; background: none; border: 1px solid var(--color-border); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; color: var(--color-text-secondary); }
+    .tag-card .actions button:hover { background: var(--color-bg-page-secondary); }
+    .tag-card .actions button.danger:hover { color: #dc2626; border-color: #dc2626; }
+  </style>
+</head>
+<body>
+  <div id="pageContent">
+    <div class="tag-toolbar">
+      <input type="text" id="searchInput" placeholder="搜索标签名...">
+      <button id="mergeBtn" class="btn btn-secondary" style="display:none;">合并所选</button>
+      <span id="selectInfo" style="color:var(--color-text-secondary);font-size:13px;display:none;"></span>
+    </div>
+
+    <div class="tag-grid" id="tagGrid"></div>
+  </div>
+
+  <script type="module" src="./tag-management.js"></script>
+  <script src="../shared/shared.js"></script>
+  <script src="../shared/layout.js"></script>
+</body>
+</html>

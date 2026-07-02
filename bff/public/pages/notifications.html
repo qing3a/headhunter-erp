@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>消息中心 - TalentFlow AI</title>
+  <link rel="stylesheet" href="../shared/shared.css">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+  <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+  <style id="pageStyle">
+.no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+
+/* Sidebar-specific styles */
+    /* Notifications Container */
+    .notifications-container {
+      display: flex;
+      gap: 20px;
+      height: calc(100vh - var(--header-height, 56px) - 48px);
+      min-height: 600px;
+    }
+    /* Left Sidebar */
+    .notifications-sidebar {
+      width: 250px;
+      flex-shrink: 0;
+      background-color: var(--color-bg, #FFFFFF);
+      border: 1px solid var(--color-border, #E2E8F0);
+      border-radius: var(--radius-lg, 12px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--color-border, #E2E8F0);
+    }
+    .sidebar-title {
+      font-size: var(--font-size-base, 14px);
+      font-weight: var(--font-weight-semibold, 600);
+      color: var(--color-text-primary, #0F172A);
+      margin: 0;
+    }
+    .category-list {
+      flex: 1;
+      padding: 8px;
+      overflow-y: auto;
+    }
+    .category-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md, 8px);
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+      margin-bottom: 2px;
+    }
+    .category-item:hover {
+      background-color: var(--color-bg-secondary, #F8FAFC);
+    }
+    .category-item.active {
+      background-color: var(--color-primary-lightest, #CCFBF1);
+    }
+    .category-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-md, 8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .category-name {
+      flex: 1;
+      font-size: var(--font-size-sm, 13px);
+      font-weight: var(--font-weight-medium, 500);
+      color: var(--color-text-primary, #0F172A);
+    }
+    .category-item.active .category-name {
+      color: var(--color-primary-dark, #0F766E);
+      font-weight: var(--font-weight-semibold, 600);
+    }
+    .category-badge {
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: var(--radius-full, 9999px);
+      background-color: var(--color-bg-tertiary, #F1F5F9);
+      color: var(--color-text-secondary, #475569);
+      font-size: var(--font-size-xs, 12px);
+      font-weight: var(--font-weight-semibold, 600);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .category-item.active .category-badge {
+      background-color: var(--color-primary, #0D9488);
+      color: #FFFFFF;
+    }
+    /* Right Content */
+    .notifications-content {
+      flex: 1;
+      background-color: var(--color-bg, #FFFFFF);
+      border: 1px solid var(--color-border, #E2E8F0);
+      border-radius: var(--radius-lg, 12px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .content-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--color-border, #E2E8F0);
+      flex-shrink: 0;
+    }
+    .header-left .unread-count {
+      font-size: var(--font-size-sm, 13px);
+      color: var(--color-text-secondary, #475569);
+    }
+    .header-left .unread-count strong {
+      color: var(--color-primary, #0D9488);
+      font-weight: var(--font-weight-semibold, 600);
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn-mark-all {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border: 1px solid var(--color-border, #E2E8F0);
+      border-radius: var(--radius-md, 8px);
+      background-color: var(--color-bg, #FFFFFF);
+      color: var(--color-text-secondary, #475569);
+      font-size: var(--font-size-sm, 13px);
+      font-weight: var(--font-weight-medium, 500);
+      font-family: var(--font-family);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-mark-all:hover {
+      border-color: var(--color-primary, #0D9488);
+      color: var(--color-primary, #0D9488);
+    }
+    .search-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .search-box svg {
+      position: absolute;
+      left: 10px;
+      color: var(--color-text-tertiary, #94A3B8);
+      pointer-events: none;
+    }
+    .search-box input {
+      width: 200px;
+      height: 34px;
+      padding: 0 12px 0 32px;
+      border: 1px solid var(--color-border, #E2E8F0);
+      border-radius: var(--radius-md, 8px);
+      background-color: var(--color-bg-secondary, #F8FAFC);
+      color: var(--color-text-primary, #0F172A);
+      font-size: var(--font-size-sm, 13px);
+      font-family: var(--font-family);
+      outline: none;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+    .search-box input:focus {
+      border-color: var(--color-primary, #0D9488);
+      background-color: var(--color-bg, #FFFFFF);
+    }
+    .search-box input::placeholder {
+      color: var(--color-text-tertiary, #94A3B8);
+    }
+    /* Message List */
+    .message-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .message-item {
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 14px 16px;
+      border-radius: var(--radius-md, 8px);
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+      margin-bottom: 4px;
+    }
+    .message-item:hover {
+      background-color: var(--color-bg-secondary, #F8FAFC);
+    }
+    .message-item.unread::before {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--color-primary, #0D9488);
+    }
+    .message-item.unread {
+      padding-left: 24px;
+    }
+    .message-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: var(--font-size-sm, 13px);
+      font-weight: var(--font-weight-semibold, 600);
+    }
+    .message-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .message-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      gap: 12px;
+    }
+    .message-title {
+      font-size: var(--font-size-base, 14px);
+      font-weight: var(--font-weight-medium, 500);
+      color: var(--color-text-primary, #0F172A);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .message-item.unread .message-title {
+      font-weight: var(--font-weight-semibold, 600);
+    }
+    .message-time {
+      flex-shrink: 0;
+      font-size: var(--font-size-xs, 12px);
+      color: var(--color-text-tertiary, #94A3B8);
+    }
+    .message-summary {
+      font-size: var(--font-size-sm, 13px);
+      color: var(--color-text-secondary, #475569);
+      line-height: 1.5;
+      margin: 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .message-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    .message-item:hover .message-actions {
+      opacity: 1;
+    }
+    .action-btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: var(--radius-sm, 4px);
+      background: transparent;
+      color: var(--color-text-tertiary, #94A3B8);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .action-btn:hover {
+      background-color: var(--color-bg-tertiary, #F1F5F9);
+      color: var(--color-text-secondary, #475569);
+    }
+    .action-btn.delete:hover {
+      background-color: var(--state-error-light, #FEE2E2);
+      color: var(--state-error, #EF4444);
+    }
+    /* Empty State */
+    /* Theme Toggle */
+    .icon-sun, .icon-moon {
+      width: 18px;
+      height: 18px;
+    }
+    :not([data-theme="dark"]) .icon-sun { display: block; }
+    .header-icon-btn {
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--color-border, #E2E8F0);
+      background-color: var(--color-bg, #FFFFFF);
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-text-secondary, #475569);
+      transition: all 0.15s ease;
+    }
+    .header-icon-btn:hover {
+      border-color: var(--color-primary, #0D9488);
+      color: var(--color-primary, #0D9488);
+    }
+    .batch-action-bar-notif {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
+      border: 1px solid #5eead4;
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+    .batch-btn-notif {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      background-color: #ffffff;
+      color: var(--color-text-secondary, #475569);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: var(--font-family);
+      border: 1px solid var(--color-border, #E2E8F0);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .batch-btn-notif:hover {
+      border-color: var(--color-primary, #0D9488);
+      color: var(--color-primary, #0D9488);
+    }
+    .batch-btn-notif.danger:hover {
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+    .msg-checkbox {
+      display: flex;
+      align-items: center;
+      padding: 0 8px 0 0;
+    }
+    .modal-overlay.show { opacity: 1; }
+    .modal-container {
+      background-color: var(--color-bg, #FFFFFF);
+      border-radius: 12px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transform: scale(0.95) translateY(10px);
+      transition: transform 0.2s ease;
+    }
+    .modal-overlay.show .modal-container { transform: scale(1) translateY(0); }
+    .modal-container.modal-lg { max-width: 600px; }
+    .modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--color-text-primary, #0F172A);
+      margin: 0;
+    }
+    .modal-close {
+      width: 30px;
+      height: 30px;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-text-secondary, #475569);
+      transition: all 0.15s ease;
+    }
+    .modal-close:hover {
+      background-color: var(--color-bg-tertiary, #F1F5F9);
+      color: var(--color-text-primary, #0F172A);
+    }
+    .btn-ghost {
+      padding: 7px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--color-border, #E2E8F0);
+      background-color: var(--color-bg, #FFFFFF);
+      color: var(--color-text-secondary, #475569);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: var(--font-family);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-ghost:hover {
+      background-color: var(--color-bg-tertiary, #F1F5F9);
+      color: var(--color-text-primary, #0F172A);
+    }
+    .detail-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .detail-category {
+      font-size: 12px;
+      padding: 3px 10px;
+      border-radius: 9999px;
+      background-color: var(--color-primary-lightest, #CCFBF1);
+      color: var(--color-primary-dark, #0F766E);
+      font-weight: 500;
+    }
+    .detail-time {
+      font-size: 12px;
+      color: var(--color-text-tertiary, #94A3B8);
+    }
+    .detail-content {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--color-text-primary, #0F172A);
+    }
+    .detail-actions {
+      display: flex;
+      align-items: center;
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid var(--color-border, #E2E8F0);
+    }
+    .detail-action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--color-border, #E2E8F0);
+      background-color: var(--color-bg, #FFFFFF);
+      color: var(--color-text-secondary, #475569);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: var(--font-family);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .detail-action-btn:hover {
+      border-color: var(--color-primary, #0D9488);
+      color: var(--color-primary, #0D9488);
+    }
+    .setting-section {
+      margin-bottom: 24px;
+    }
+    .setting-section:last-child { margin-bottom: 0; }
+    .setting-section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-text-primary, #0F172A);
+      margin: 0 0 12px 0;
+    }
+    .setting-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--color-border-light, #F1F5F9);
+    }
+    .setting-item:last-child { border-bottom: none; }
+    .setting-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .setting-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-text-primary, #0F172A);
+    }
+    .setting-desc {
+      font-size: 12px;
+      color: var(--color-text-tertiary, #94A3B8);
+    }
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #CBD5E1;
+      transition: .3s;
+      border-radius: 22px;
+    }
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .toggle-slider {
+      background-color: var(--color-primary, #0D9488);
+    }
+    input:checked + .toggle-slider:before {
+      transform: translateX(18px);
+    }
+  </style>
+</head>
+<body>
+  <div id="pageContent">
+<!-- Notifications Container -->
+      <div class="notifications-container">
+        
+        <!-- Left: Category List -->
+        <div class="notifications-sidebar">
+          <div class="sidebar-header">
+            <h2 class="sidebar-title">消息分类</h2>
+          </div>
+          <div class="category-list">
+            <div class="category-item active" data-category="all">
+              <div class="category-icon" style="background-color: var(--color-primary-lightest, #CCFBF1); color: var(--color-primary, #0D9488);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                  <polyline points="22,6 12,13 2,6"/>
+                </svg>
+              </div>
+              <span class="category-name">全部消息</span>
+              <span class="category-badge">8</span>
+            </div>
+
+            <div class="category-item" data-category="system">
+              <div class="category-icon" style="background-color: var(--state-info-light, #DBEAFE); color: var(--state-info, #3B82F6);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+              </div>
+              <span class="category-name">系统通知</span>
+              <span class="category-badge">2</span>
+            </div>
+
+            <div class="category-item" data-category="interview">
+              <div class="category-icon" style="background-color: var(--state-warning-light, #FEF3C7); color: var(--state-warning, #F59E0B);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/>
+                  <line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+              </div>
+              <span class="category-name">面试提醒</span>
+              <span class="category-badge">2</span>
+            </div>
+
+            <div class="category-item" data-category="candidate">
+              <div class="category-icon" style="background-color: var(--state-success-light, #D1FAE5); color: var(--state-success, #10B981);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+              </div>
+              <span class="category-name">候选人动态</span>
+              <span class="category-badge">2</span>
+            </div>
+
+            <div class="category-item" data-category="feedback">
+              <div class="category-icon" style="background-color: var(--color-primary-lightest, #CCFBF1); color: var(--color-primary, #0D9488);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </div>
+              <span class="category-name">客户反馈</span>
+              <span class="category-badge">1</span>
+            </div>
+
+            <div class="category-item" data-category="ai">
+              <div class="category-icon" style="background-color: rgba(168, 85, 247, 0.1); color: #A855F7;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2z"/>
+                </svg>
+              </div>
+              <span class="category-name">AI 系统消息</span>
+              <span class="category-badge">1</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Message List -->
+        <div class="notifications-content">
+          <!-- Top Action Bar -->
+          <div class="content-header">
+            <div class="header-left">
+              <span class="unread-count">未读消息：<strong id="unreadCount">6</strong> 条</span>
+            </div>
+            <div class="header-right">
+              <button class="header-icon-btn" id="settingsBtn" title="通知设置">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </button>
+              <button class="header-icon-btn" id="batchModeBtn" title="批量操作">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"/>
+                  <rect x="14" y="3" width="7" height="7"/>
+                  <rect x="14" y="14" width="7" height="7"/>
+                  <rect x="3" y="14" width="7" height="7"/>
+                </svg>
+              </button>
+              <button class="btn-mark-all" id="markAllReadBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                全部已读
+              </button>
+              <div class="search-box">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input type="text" id="searchInput" placeholder="搜索消息..." />
+              </div>
+            </div>
+          </div>
+
+          <!-- Batch Action Bar -->
+          <div class="batch-action-bar-notif" id="batchActionBar" style="display: none;">
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="selectAllMessages" class="w-4 h-4 accent-teal-600" />
+                <span class="text-sm text-slate-600">全选</span>
+              </label>
+              <span class="text-sm text-slate-500">已选 <strong id="selectedMsgCount" class="text-slate-800">0</strong> 条消息</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="batch-btn-notif" id="batchMarkReadBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                标记已读
+              </button>
+              <button class="batch-btn-notif danger" id="batchDeleteBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+                删除
+              </button>
+              <button class="batch-btn-notif" id="cancelBatchBtn">取消</button>
+            </div>
+          </div>
+
+          <!-- Message List -->
+          <div class="message-list" id="messageList">
+            <!-- Message 1: System Notification (Unread) -->
+            <div class="message-item unread" data-category="system" data-id="1">
+              <div class="message-avatar" style="background-color: var(--state-info-light, #DBEAFE); color: var(--state-info, #3B82F6);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+              </div>
+              <div class="message-content">
+                <div class="message-header">
+                  <span class="message-title">系统维护通知</span>
+                  <span class="message-time">今天 09:30</span>
+                </div>
+                <p class="message-summary">系统将于本周六（6月30日）凌晨2:00-4:00进行例行维护，期间可能无法正常访问，请提前安排工作。</p>
+              </div>
+              <div class="message-actions">
+                <button class="action-btn mark-read" title="标记已读">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+                <button class="action-btn delete" title="删除">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Message 2: Interview Reminder (Unread) -->
+            <div class="message-item unread" data-category="interview" data-id="2">
+              <div class="message-avatar" style="background-color: var(--state-warning-light, #FEF3C7); color: var(--state-warning, #F59E0B);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/>
+                  <line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+              </div>
+              <div class="message-content">
+                <div class="message-header">
+                  <span class="message-title">面试提醒：张明 - 产品经理</span>
+                  <span class="message-time">今天 08:00</span>
+                </div>
+                <p class="message-summary">候选人张明的产品经理岗位面试将于今天下午14:00在腾讯会议进行，请提前准备面试材料。会议号：123-456-789</p>
+              </div>
+              <div class="message-actions">
+                <button class="action-btn mark-read" title="标记已读">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+                <button class="action-btn delete" title="删除">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Message 3: Candidate Update (Unread) -->
+            <div class="message-item unread" data-category="candidate" data-id="3">
+              <div class="message-avatar" style="background-color: var(--color-primary-lightest, #CCFBF1); color: var(--color-primary, #0D9488);">
+                LW
+              </div>
+              <div class="message-content">
+                <div class="message-header">
+                  <span class="message-title">候选人刘伟状态更新</span>
+                  <span class="message-time">昨天 16:45</span>
+                </div>
+                <p class="message-summary">候选人刘伟已通过字节跳动Python开发岗位的技术一面，状态已更新为"待二面"，请及时安排下一轮面试。</p>
+              </div>
+              <div class="message-actions">
+                <button class="action-btn mark-read" title="标记已读">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+                <button class="action-btn delete" title="删除">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Message 4: AI System Message (Unread) -->
+            <div class="message-item unread" data-category="ai" data-id="4">
+              <div class="message-avatar" style="background-color: rgba(168, 85, 247, 0.1); color: #A855F7;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2z"/>
+                </svg>
+              </div>
+              <div class="message-content">
+                <div class="message-header">
+                  <span class="message-title">AI智能匹配完成</span>
+                  <span class="message-time">昨天 15:20</span>
+                </div>
+                <p class="message-summary">AI已为"高级前端工程师"职位完成智能匹配，共找到12位匹配度较高的候选人，其中5位匹配度超过85%，点击查看详情。</p>
+              </div>
+              <div class="message-actions">
+                <button class="action-btn mark-read" title="标记已读">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+                <button class="action-btn delete" title="删除">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Message 5: Client Feedback (Unread) -->
+            <div class="message-item unread" data-category="feedback" data-id="5">
+              <div class="message-avatar" style="background-color: var(--state-success-light, #D1FAE5); color: var(--state-success, #10B981);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </div>
+              <div class="message-content">
+                <div class="message-header">
+                  <span class="message-title">客户反馈：阿里巴巴</span>
+                  <span class="message-time">昨天 11:30</span>
+                </div>
+                <p class="message-summary">阿里巴巴对候选人赵强的面试反馈已提交，综合评分4.5/5，建议进入下一轮。请查看详细反馈内容并及时跟进。</p>
+              </div>
+              <div class="message-actions">
+                <button class="action-btn mark-read" title="标记已读">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+                <button class="action-btn delete" title="删除">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Message 6: Candidate Update (Unread) -->
+            <div class="message-item unread" data-category="candidate" data-id="6">
+              <div class="message-avatar" style="background-color: var(--color-primary-lightest, #CCFBF1); color: var(--color-primary, #0D9488);">
+                WF
+              </div>
+              <div class="message-content">
+                <div class="message-header">
+                  <span class="message-title">新候选人投递：王芳</span>
+                  <span class="message-time">昨天 09:15</span>
+                </div>
+                <p class="message-summary">新候选人王芳投递了"高级产品设计师"岗位，5年工作经验，曾任职于小红书，已自动分类至候选人库待审核。</p>
+              </div>
+              <div class="message-actions">
+                <button class="action-btn mark-read" title="标记已读">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+                <button class="action-btn delete" title="删除">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Message 7: Interview Reminder (Read) -->
+            <div class="message-item" data-category="interview" data-id="7">
+              <div class="message-avatar" style="background-color: var(--state-warning-light, #FEF3C7); color: var(--state-warning, #F59E0B);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/>
+                  <line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+              </div>
+              <div class="message-content">
+                <div class="message-header">
+                  <span class="message-title">面试完成：李华 - 数据分析师</span>
+                  <span class="message-time">前天 15:30</span>
+                </div>
+                <p class="message-summary">候选人李华的数据分析师岗位终面已完成，面试官反馈良好，请及时整理面试记录并与客户美团沟通结果。</p>
+              </div>
+              <div class="message-actions">
+                <button class="action-btn mark-read" title="标记未读">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                </button>
+                <button class="action-btn delete" title="删除">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Message 8: System Notification (Read) -->
+            <div class="message-item" data-category="system" data-id="8">
+              <div class="message-avatar" style="background-color: var(--state-info-light, #DBEAFE); color: var(--state-info, #3B82F6);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+              </div>
+              <div class="message-content">
+                <div class="message-header">
+                  <span class="message-title">版本更新通知 v2.3.0</span>
+                  <span class="message-time">3天前</span>
+                </div>
+                <p class="message-summary">系统已升级至v2.3.0版本，新增AI智能匹配优化、简历批量导入功能，修复若干已知问题。点击查看完整更新日志。</p>
+              </div>
+              <div class="message-actions">
+                <button class="action-btn mark-read" title="标记未读">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                </button>
+                <button class="action-btn delete" title="删除">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Empty State (Hidden by default) -->
+          <div class="empty-state" id="emptyState" style="display: none;">
+            <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            <p class="empty-state-title">暂无消息</p>
+            <p class="empty-state-desc">当前分类下没有消息</p>
+          </div>
+        </div>
+
+      </div>
+  </div>
+
+  <script src="../shared/auth.js"></script>
+  <script src="../shared/menu-config.js"></script>
+  <script src="../shared/loading.js"></script>
+  <script src="../shared/router.js"></script>
+  <script src="../shared/api.js"></script>
+  <script src="../shared/shared.js"></script>
+  <script src="../shared/layout.js"></script>
+  <script type="module" src="./notifications.js"></script>
+</body>
+</html>

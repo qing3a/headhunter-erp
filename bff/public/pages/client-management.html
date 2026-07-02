@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>客户管理</title>
+  <link rel="stylesheet" href="../shared/shared.css">
+  <script src="../shared/auth.js"></script>
+  <script src="../shared/loading.js"></script>
+  <script src="../shared/router.js"></script>
+  <script src="../shared/api.js"></script>
+  <style id="pageStyle">
+    .client-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+    .client-toolbar input { flex: 1; max-width: 320px; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 14px; }
+    .client-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+    .client-card { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; padding: 16px; }
+    .client-card .name { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+    .client-card .meta { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+    .client-card .actions { display: flex; gap: 4px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--color-border-light); }
+    .client-card .actions button { flex: 1; background: none; border: 1px solid var(--color-border); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; color: var(--color-text-secondary); }
+    .client-card .actions button:hover { background: var(--color-bg-page-secondary); }
+    .client-card .actions button.danger:hover { color: #dc2626; border-color: #dc2626; }
+    .notes-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .note-item { background: var(--color-bg-page-secondary, #f9fafb); border-radius: 6px; padding: 10px 12px; }
+    .note-item .meta { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 4px; }
+    .note-item .content { font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+    .note-item .actions { display: flex; gap: 8px; margin-top: 6px; }
+    .note-item .actions button { background: none; border: none; color: var(--color-text-secondary); cursor: pointer; font-size: 12px; padding: 0; }
+    .note-item .actions button:hover { color: var(--color-primary); }
+  </style>
+</head>
+<body>
+  <div id="pageContent">
+    <div class="client-toolbar">
+      <input type="text" id="searchInput" placeholder="搜索客户名 / 联系人 / 行业">
+      <button class="btn btn-primary" id="newBtn">+ 新建客户</button>
+    </div>
+    <div class="client-grid" id="clientGrid"></div>
+  </div>
+
+  <script type="module" src="./client-management.js"></script>
+  <script src="../shared/shared.js"></script>
+  <script src="../shared/layout.js"></script>
+</body>
+</html>

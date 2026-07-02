@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>候选人库</title>
+  <link rel="stylesheet" href="../shared/shared.css">
+  <script src="../shared/auth.js"></script>
+  <script src="../shared/menu-config.js"></script>
+  <script src="../shared/loading.js"></script>
+  <script src="../shared/router.js"></script>
+  <script src="../shared/api.js"></script>
+  <script src="../shared/candidate-form.js"></script>
+  <style id="pageStyle">
+    .page-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .page-toolbar .search-box { flex: 1; min-width: 240px; max-width: 360px; position: relative; }
+    .page-toolbar .search-box input { width: 100%; padding: 8px 12px 8px 36px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 14px; }
+    .page-toolbar .search-box::before { content: ''; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E") center/contain no-repeat; pointer-events: none; }
+    .page-toolbar .btn { white-space: nowrap; }
+
+    .filter-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; padding: 12px 16px; background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; }
+    .filter-bar .filter-label { font-size: 13px; color: var(--color-text-secondary, #6b7280); }
+    .filter-bar select, .filter-bar input { padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; min-width: 120px; }
+
+    .table-card { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; }
+    .table-card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--color-border-light); }
+    .table-card-header h3 { margin: 0; font-size: 15px; font-weight: 600; }
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th, .data-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--color-border-light); font-size: 14px; }
+    .data-table th { background: var(--color-bg-page-secondary, #f9fafb); font-weight: 600; color: var(--color-text-secondary, #6b7280); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .data-table tbody tr { cursor: pointer; transition: background 0.15s; }
+    .data-table tbody tr:hover { background: var(--color-bg-page-secondary, #f9fafb); }
+    .data-table .col-name { font-weight: 500; color: var(--color-primary); }
+    .data-table .col-actions { text-align: right; white-space: nowrap; }
+    .data-table .col-actions .btn-link { color: var(--color-text-secondary); cursor: pointer; font-size: 13px; padding: 4px 8px; border: none; background: none; }
+    .data-table .col-actions .btn-link:hover { color: var(--color-primary); }
+    .data-table .col-actions .btn-link.danger:hover { color: #dc2626; }
+
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; background: var(--color-primary-lightest, #CCFBF1); color: var(--color-primary-dark, #0F766E); margin-right: 4px; }
+
+    .rating { color: #f59e0b; font-size: 13px; }
+    .rating-empty { color: #d1d5db; }
+
+    .pagination { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--color-border-light); }
+    .pagination-info { font-size: 13px; color: var(--color-text-secondary); }
+    .pagination-pages { display: flex; gap: 4px; }
+    .pagination-pages button { padding: 4px 10px; border: 1px solid var(--color-border); background: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .pagination-pages button:hover:not(:disabled) { background: var(--color-bg-page-secondary); }
+    .pagination-pages button.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+    .pagination-pages button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* 批量操作浮动条 */
+    .batch-bar { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #1f2937; color: #fff; border-radius: 10px; padding: 10px 16px; display: none; align-items: center; gap: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 100; }
+    .batch-bar.show { display: flex; }
+    .batch-bar .count { font-size: 13px; padding: 0 8px; }
+    .batch-bar .batch-btn { background: var(--color-primary); color: #fff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .batch-bar .batch-btn.secondary { background: rgba(255,255,255,0.1); }
+    .batch-bar .batch-btn.danger { background: #dc2626; }
+    .batch-bar .batch-btn:hover { opacity: 0.9; }
+
+    .candidate-form-wrapper fieldset { border: 1px solid var(--color-border-light); border-radius: 8px; padding: 16px; margin: 0 0 16px 0; }
+    .candidate-form-wrapper legend { padding: 0 8px; font-size: 13px; font-weight: 600; color: var(--color-text-secondary); }
+    .candidate-form-wrapper .form-row { display: flex; gap: 12px; margin-bottom: 0; }
+    .candidate-form-wrapper .form-row .form-group { flex: 1; }
+  </style>
+</head>
+<body>
+  <div id="pageContent">
+    <div class="page-toolbar">
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="搜索姓名 / 邮箱 / 手机 / 公司">
+      </div>
+      <button id="newBtn" class="btn btn-primary">+ 新建候选人</button>
+    </div>
+
+    <div class="filter-bar">
+      <span class="filter-label">状态：</span>
+      <select id="statusFilter">
+        <option value="">全部</option>
+        <option value="active">活跃求职</option>
+        <option value="passive">被动考虑</option>
+        <option value="placed">已入职</option>
+        <option value="unavailable">暂不考虑</option>
+        <option value="blacklist">黑名单</option>
+      </select>
+      <span class="filter-label">城市：</span>
+      <select id="cityFilter">
+        <option value="">全部</option>
+      </select>
+      <span class="filter-label">学历：</span>
+      <select id="educationFilter">
+        <option value="">全部</option>
+        <option value="bachelor">本科</option>
+        <option value="master">硕士</option>
+        <option value="phd">博士</option>
+        <option value="highschool">高中</option>
+      </select>
+      <span class="filter-label">行业：</span>
+      <input id="industryFilter" class="form-input" style="width:120px;padding:4px 8px;font-size:13px;" placeholder="如 互联网">
+      <span class="filter-label">薪资(k)：</span>
+      <input id="salaryMinFilter" type="number" min="0" style="width:70px;padding:4px 8px;font-size:13px;" placeholder="下限">
+      <span style="color:var(--color-text-secondary);">-</span>
+      <input id="salaryMaxFilter" type="number" min="0" style="width:70px;padding:4px 8px;font-size:13px;" placeholder="上限">
+      <span class="filter-label">推荐：</span>
+      <select id="hasRecFilter">
+        <option value="">全部</option>
+        <option value="true">已推荐</option>
+        <option value="false">未推荐</option>
+      </select>
+      <span class="filter-label">排序：</span>
+      <select id="sortFilter">
+        <option value="">最近更新</option>
+        <option value="created_at_desc">创建时间</option>
+        <option value="salary_desc">薪资降序</option>
+        <option value="years_desc">工作年限</option>
+      </select>
+      <button id="resetFilterBtn" class="btn-link" style="margin-left:auto;background:none;border:none;color:var(--color-text-secondary);cursor:pointer;font-size:13px;">重置</button>
+    </div>
+
+    <div class="view-bar" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <span class="filter-label" style="font-size:13px;color:var(--color-text-secondary);">视图：</span>
+      <select id="viewSelect" style="padding:4px 8px;font-size:13px;border:1px solid var(--color-border);border-radius:6px;min-width:140px;">
+        <option value="">选择已保存视图...</option>
+      </select>
+      <button id="saveViewBtn" class="btn-link" style="background:none;border:none;color:var(--color-primary);cursor:pointer;font-size:13px;">💾 保存当前筛选为视图</button>
+      <button id="deleteViewBtn" class="btn-link" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:13px;display:none;">删除视图</button>
+    </div>
+
+    <div class="table-card">
+      <div class="table-card-header">
+        <h3>候选人列表 <span id="totalCount" style="color:var(--color-text-secondary);font-weight:normal;font-size:13px;margin-left:8px;"></span></h3>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width:32px;"><input type="checkbox" id="selectAllCheck"></th>
+            <th>姓名</th>
+            <th>当前职位</th>
+            <th>当前公司</th>
+            <th>年限</th>
+            <th>城市</th>
+            <th>状态</th>
+            <th>评分</th>
+            <th>标签</th>
+            <th>更新时间</th>
+            <th class="col-actions">操作</th>
+          </tr>
+        </thead>
+        <tbody id="candidateTbody"></tbody>
+      </table>
+      <div id="pagination" class="pagination"></div>
+    </div>
+
+    <!-- 批量操作浮动条 -->
+    <div id="batchBar" class="batch-bar">
+      <span class="count">已选 <span id="batchCount">0</span> 人</span>
+      <!-- ===== P2-D3 修复：全选所有页按钮 ===== -->
+      <button class="batch-btn secondary" id="selectAllPagesBtn" style="display:none;">全选所有 <span id="selectAllPagesTotal">0</span> 人</button>
+      <button class="batch-btn" data-batch="tag">批量打标签</button>
+      <button class="batch-btn secondary" data-batch="status">批量改状态</button>
+      <button class="batch-btn danger" data-batch="delete">批量删除</button>
+      <button class="batch-btn secondary" data-batch="cancel">取消</button>
+    </div>
+  </div>
+
+  <script type="module" src="./candidate-pool.js"></script>
+  <script src="../shared/shared.js"></script>
+  <script src="../shared/layout.js"></script>
+</body>
+</html>
