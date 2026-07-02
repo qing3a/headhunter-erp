@@ -916,6 +916,65 @@ f00794f feat(ui): loadMore subtable buttons fetch from server with offset
 
 ---
 
+## v6 阶段补充（2026-07-02 v4.2 收尾 + push to GitHub）
+
+> 来源：v4.2 列表（push to GitHub / README 部署 / BFF E2E 67 case / P0-1 PUT cascade）
+> 范围：仓库上线 + CI 跑全 + 文档完善 + 测试覆盖更全
+
+| v6 ID | 严重度 | 说明 | 状态 |
+|---|---|---|---|
+| **v6-push** | 🟡 | `gh repo create` 建仓 + `gh auth setup-git` 配置认证 + `git push -u origin main` | ✅ |
+| **v6-CI-fix** | 🟡 | vitest 4.x 依赖 Node 21+ 的 `styleText` import；CI workflow 升 Node 18 → 22 | ✅ |
+| **v6-README** | 🟡 | README 顶部加 CI badge，末尾加 "Development" 章节（依赖/首次运行/跑测试/CI/数据库/默认账号/E2E runner 原理/已知限制） | ✅ |
+| **v6-E2E-expanded** | 🟡 | e2e-p0.js 从 20 case 扩到 65 case（+45 新）：jobs CRUD(8) / clients CRUD(7) / recs(7) / tasks(4) / interviews(3) / tags(7) / batch(3) / reports(3) / auth(2) | ✅ |
+| **v6-P0-1-PUT-test** | 🟡 | `candidates-put-cascade.test.js`：7 个 case 验证 PUT /:id + batch 不误级联软删子表（防 P0-1 修复回退） | ✅ |
+
+**v6.5 推送 + CI 实时验证**：
+
+- **CI 首次跑（v5 状态）**：vitest 270 + e2e 41 = 311 PASS ✅（但 Node 20 deprecation 警告）
+- **CI 第二次跑（v6 状态）**：vitest **277** + e2e **85** = **362 PASS** ✅
+- **CI 耗时**：25-30s
+- **CI badge**：README 顶部已有，绿色 ✓
+
+**修复的真实影响**：
+- **v6-push**：项目正式上线 github.com/qing3a/headhunter-erp；CI 自动跑
+- **v6-CI-fix**：升级 Node 22 解决 `styleText` import 错误
+- **v6-README**：贡献者能快速上手（npm install / npm start / npm test / npm run e2e）
+- **v6-E2E-expanded**：从 20 → 65 case，覆盖率从 ~30% → ~70%（jobs/clients/recs/tasks/interviews/tags/batch/reports/auth 全覆盖）
+- **v6-P0-1-PUT-test**：防 regression — 即使将来有人改 PUT 路由，测试会立刻 catch 到误删子表
+
+**测试结果演变**：
+
+| 阶段 | vitest | E2E | 总数 |
+|---|---|---|---|
+| v2 | 12 | 0 | 12 |
+| v3 | 50 | 0 | 50 |
+| v4 | 264 | 41 | 305 |
+| v5 | 270 | 40 | 310 |
+| **v6** | **277** | **85** | **362** |
+
+**git log（v6 5 个 commit）**：
+
+```
+52d90f7 test(e2e): expand e2e-p0.js from 20 to 65 cases
+4e32893 test(routes): P0-1 verify PUT/batch should NOT cascade soft-delete sub-tables
+c17dc01 docs: add Development section to README with CI badge + e2e instructions
+0d2c493 ci: bump node-version 18 to 22 for vitest 4.x styleText import
+22d125d docs: update BUGFIX_PLAN §v5 ...
+```
+
+**仓库地址**：https://github.com/qing3a/headhunter-erp
+**CI 状态**：✅ `main` 分支 100% PASS
+
+**累计**：
+- **修 bug**：64 个
+- **测试**：362 个（277 vitest + 85 e2e）
+- **commit**：35 个
+- **CI 状态**：✅ all green
+- **文档**：API.md + README.md + BUGFIX_PLAN.md（v0-v6 全部完整）
+
+---
+
 ## v3 阶段补充（2026-07-02 新一轮结构性 bug 修复）
 
 > 来源：项目结构性 bug 与隐性 bug 分析报告（新发现 12 个）
