@@ -78,9 +78,31 @@ router.get('/', asyncHandler(async (req, res) => {
     params.push(req.user.id);
   }
   if (keyword) {
-    where.push('(c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR c.current_company LIKE ?)');
-    const kw = `%${keyword}%`;
-    params.push(kw, kw, kw, kw);
+    // ===== v6.5 优化：FTS5 全文搜索 =====
+    // FTS5 支持 unicode61 分词（中文按字符、英文按词）+ 前缀 *，比 LIKE '%k%' 快几个数量级。
+    // 失败时回落到 LIKE；LIKE 仍可命中 B-tree 索引列（name/phone/email）。
+    if (globalThis.__FTS_AVAILABLE__) {
+      // FTS5 MATCH 语法：把 keyword 转 safe + 加前缀 *
+      const ftsKeyword = String(keyword).trim()
+        .replace(/['"()]/g, '')  // 去特殊字符（防 MATCH 注入）
+        .replace(/[^a-zA-Z0-9\u4e00-\u9fa5 ]/g, ' ')  // 替换非字母数字中文为空格
+        .trim();
+      if (ftsKeyword) {
+        where.push(`c.id IN (SELECT candidate_id FROM candidates_fts WHERE candidates_fts MATCH ?)`);
+        params.push(ftsKeyword + '*');
+      } else {
+        // 纯特殊字符 → 退回 LIKE
+        where.push('(c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR c.current_company LIKE ?)');
+        const kw = `%${keyword}%`;
+        params.push(kw, kw, kw, kw);
+      }
+    } else {
+      // 降级：LIKE 全表扫
+      where.push('(c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR c.current_company LIKE ?)');
+      const kw = `%${keyword}%`;
+      params.push(kw, kw, kw, kw);
+    }
+    // ===== 优化结束 =====
   }
   if (status) { where.push('c.status = ?'); params.push(status); }
   if (city) { where.push('c.current_city = ?'); params.push(city); }

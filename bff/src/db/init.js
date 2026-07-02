@@ -325,6 +325,51 @@ function createTables() {
     );
   `);
 
+  // ===== v6.5 优化：候选人 FTS5 全文搜索 =====
+  // sql.js 1.10+ 启用 SQLITE_ENABLE_FTS5 时支持；不支持时降级到 LIKE（路由层感知）。
+  // 失败策略：try-catch 包住全部，失败时 globalThis.__FTS_AVAILABLE__ = false，不破坏现有功能。
+  try {
+    STATE.db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS candidates_fts USING fts5(
+        candidate_id UNINDEXED,
+        name,
+        phone,
+        email,
+        current_company,
+        tokenize = 'unicode61 remove_diacritics 2'
+      );
+    `);
+    // triggers: candidates INSERT/UPDATE/DELETE 同步到 FTS
+    STATE.db.exec(`
+      CREATE TRIGGER IF NOT EXISTS candidates_fts_ai AFTER INSERT ON candidates BEGIN
+        INSERT INTO candidates_fts(candidate_id, name, phone, email, current_company)
+        VALUES (NEW.id, COALESCE(NEW.name, ''), COALESCE(NEW.phone, ''), COALESCE(NEW.email, ''), COALESCE(NEW.current_company, ''));
+      END;
+    `);
+    STATE.db.exec(`
+      CREATE TRIGGER IF NOT EXISTS candidates_fts_au AFTER UPDATE ON candidates BEGIN
+        UPDATE candidates_fts SET name = COALESCE(NEW.name, ''), phone = COALESCE(NEW.phone, ''),
+          email = COALESCE(NEW.email, ''), current_company = COALESCE(NEW.current_company, '')
+        WHERE candidate_id = NEW.id;
+      END;
+    `);
+    STATE.db.exec(`
+      CREATE TRIGGER IF NOT EXISTS candidates_fts_ad AFTER DELETE ON candidates BEGIN
+        DELETE FROM candidates_fts WHERE candidate_id = OLD.id;
+      END;
+    `);
+    // backfill（已有 candidates 数据；INSERT OR IGNORE 避免与 trigger 重复插入）
+    STATE.db.exec(`INSERT OR IGNORE INTO candidates_fts(candidate_id, name, phone, email, current_company)
+             SELECT id, COALESCE(name, ''), COALESCE(phone, ''), COALESCE(email, ''), COALESCE(current_company, '')
+             FROM candidates`);
+    globalThis.__FTS_AVAILABLE__ = true;
+  } catch (e) {
+    // FTS5 不支持 → 降级（不抛错，保留 LIKE + 索引方案）
+    console.warn('FTS5 not available, falling back to LIKE:', e.message);
+    globalThis.__FTS_AVAILABLE__ = false;
+  }
+  // ===== 优化结束 =====
+
   safeExec('ALTER TABLE interviews ADD COLUMN user_id INTEGER');
   safeExec('ALTER TABLE interviews ADD COLUMN deleted_at TEXT');
   safeExec('ALTER TABLE tasks ADD COLUMN user_id INTEGER');
@@ -405,6 +450,14 @@ function createTables() {
     CREATE INDEX IF NOT EXISTS idx_rec_status ON recommendations(status);
     CREATE INDEX IF NOT EXISTS idx_rec_deleted ON recommendations(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_rec_change ON recommendations(last_status_change_at);
+    -- ===== v6.5 优化：overdue 复合索引（帮助 query optimizer 走索引）=====
+    -- overdue 查询常见模式：WHERE status = ? AND last_status_change_at < ?（找滞留 N 天的推荐）
+    -- 和 WHERE status = ? ORDER BY recommend_at DESC（按推荐时间排序的列表）
+    -- 单列索引 status 让 optimizer 候选多个；复合 (status, last_status_change_at) /
+    -- (status, recommend_at) 让 WHERE + ORDER BY 一条索引覆盖，扫描次数骤降。
+    CREATE INDEX IF NOT EXISTS idx_rec_status_change ON recommendations(status, last_status_change_at);
+    CREATE INDEX IF NOT EXISTS idx_rec_status_recommend ON recommendations(status, recommend_at);
+    -- ===== 优化结束 =====
     CREATE INDEX IF NOT EXISTS idx_rec_hist_rec ON recommendation_status_history(recommendation_id);
   `);
 
