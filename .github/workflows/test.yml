@@ -28,13 +28,22 @@ jobs:
           path: bff/node_modules/better-sqlite3/build
           key: ${{ runner.os }}-better-sqlite3-${{ hashFiles('bff/package-lock.json') }}
 
-      - name: Install BFF deps
+      - name: Install BFF deps + frontend-build (v7.5)
         working-directory: bff
-        run: npm ci
+        run: |
+          npm ci
+          node frontend-build.js   # ===== v7.5 新增：保证 CI 测 build 后的 page =====
 
       - name: Run vitest
         working-directory: bff
         run: npm test
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: bff/coverage/
 
       - name: Run E2E
         working-directory: bff
