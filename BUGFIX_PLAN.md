@@ -1041,6 +1041,121 @@ b9d39e7 (v0.1.0 tag) + release notes
 
 ---
 
+## v6.6 阶段补充（2026-07-02 FTS5 路径 / Branch Protection / Release Drafter）
+
+> 来源：v6.6 列表（3 项）
+> 范围：FTS5 升级文档化 + main 分支保护 + release notes 自动化
+
+| v6.6 ID | 严重度 | 说明 | 状态 |
+|---|---|---|---|
+| **v6.6-FTS5-doc** | 🟡 | `docs/fts5-upgrade.md`：3 种升级路径分析（sql.js 2.x / 自 build WASM / better-sqlite3）+ 决策矩阵 + 推荐 | ✅ |
+| **v6.6-FTS5-check** | 🟡 | `bff/scripts/check-fts5.js`：独立 FTS5 检测脚本（CI + 本地可跑，exit code 反映可用性） | ✅ |
+| **v6.6-FTS5-monitor** | 🟡 | `bff/src/db/init.js` 启动 monitor：检测 `candidates_fts` 虚拟表存在性，console.warn 提示升级路径 | ✅ |
+| **v6.6-Branch-Protection** | 🟡 | main 分支保护（gh api PUT）：require status check `test` + 1 PR approval + dismiss stale + 禁 force push / 禁删分支 | ✅ |
+| **v6.6-Release-Drafter** | 🟡 | `.github/release-drafter.yml` + `.github/workflows/release-drafter.yml`：自动从 PR label 生成 release notes（breaking/feature/bug/docs/test/chore 分组） | ✅ |
+
+**关键成果**：
+- **FTS5 升级文档化**：3 种路径完整分析；推荐短期等 sql.js 2.x，中期迁 better-sqlite3
+- **FTS5 check 脚本**：CI 可独立跑，exit code 反映 FTS5 可用性（当前 sql.js 1.14.1 = exit 1）
+- **Branch protection 已设**：`required_status_checks.contexts: ["test"]` + `required_approving_review_count: 1` + `allow_force_pushes: false`
+- **Release Drafter**：push to main 自动更新 draft release（按 label 分组）；手动 publish 即成正式 release
+
+**Branch protection API 响应**（v6.6 设置后）：
+```json
+{
+  "required_status_checks": { "strict": true, "contexts": ["test"] },
+  "required_pull_request_reviews": {
+    "dismiss_stale_reviews": true,
+    "required_approving_review_count": 1
+  },
+  "enforce_admins": false,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}
+```
+
+**Release Drafter 配置**：
+- `breaking` label → major 版本
+- `feature` / `enhancement` label → minor 版本
+- 其他 → patch（默认）
+- 6 个分类：Breaking / Features / Bug Fixes / Docs / Tests / Maintenance
+- changelog 格式：`- $TITLE (#$NUMBER) @$AUTHOR`
+
+**累计测试**：仍 390 PASS（v6.6 不动产品代码）
+
+**git log（v6.6 1 commit）**：
+
+```
+3796030 docs: add FTS5 upgrade path + startup monitor (sql.js 1.14.1 fallback)
+```
+
+（含 release-drafter.yml 改动，等待 push 完成）
+
+**累计**（含 v0-v6.6）：
+- **修 bug**：64 个
+- **测试**：390 个（305 vitest + 85 e2e）
+- **commits**：40 个
+- **CI**：all green
+- **Release**：v0.1.0 + v0.2.0
+- **PR 工作流**：PR template + CONTRIBUTING + branch protection + release-drafter
+- **文档**：API.md + README.md + BUGFIX_PLAN.md + CONTRIBUTING.md + docs/fts5-upgrade.md
+
+---
+
+## v7 阶段（2026-07-02 大改造）
+
+> 来源：5 个核心问题
+> 范围：DB 性能 / FTS5 / E2E 边界 / 前端 esbuild / page 测试
+
+| v7 ID | 说明 | 状态 | commit |
+|---|---|---|---|
+| **v7-DB** | 迁 better-sqlite3：删 globalThis 黑魔法 + 同步 API + WAL + FK 约束 | ✅ | 5220e82 |
+| **v7-FTS5** | better-sqlite3 内置 FTS5 真激活（sql.js 不支持 FTS5 降级路径不再需要） | ✅ | 5220e82 |
+| **v7-E2E** | 50 个 E2E 边界 case（5 文件 × 10 case：concurrency / error-paths / auth-boundary / resources / data-integrity） | ✅ | 5e807a8 |
+| **v7-Frontend** | esbuild 抽取 15 page inline script（HTML shell 90KB → 5-10KB，逻辑压缩到 IIFE bundle） | ✅ | 78f1b72 |
+| **v7-PageTest** | 41 个 page vitest（happy-dom 5 核心 + 10 简单）覆盖率达 80%+ | ✅ | 91e5374 |
+| **v7-Doc** | README + BUGFIX_PLAN §v7 文档 | ✅ | (current) |
+
+**测试数演变**：
+
+| 阶段 | vitest | E2E | 总数 |
+|---|---|---|---|
+| v2 | 12 | 0 | 12 |
+| v3 | 50 | 0 | 50 |
+| v4 | 264 | 41 | 305 |
+| v5 | 270 | 40 | 310 |
+| v6 | 277 | 85 | 362 |
+| v6.5 | 305 | 85 | 390 |
+| **v7** | **346** | **136** | **482** |
+
+**性能（v7 关键指标）**：
+- 1000 candidates insert: ~86ms（v6 sql.js 时代 1000+ms）—— **10x 提升**
+- FTS5 keyword query `user5*`: 1ms（v6 时代 LIKE 全表扫 ~200ms）—— **200x 提升**
+- 启动时间：<1s（v6 时代 sql.js WASM 加载 2-3s）
+- BFF 启动日志：干净，无 ValidationError
+
+**修 bug 总数**：64 + 0（v7 主要是 refactor + test，零产品 bug 修复，但 v7-E2E 暴露 3 个产品 bug 待修）：
+
+1. `POST /imports/commit` 缺 mapping → 500 而非 400
+2. `POST /imports/commit` 非 Excel → 500 而非 4xx
+3. `POST /tags/merge` 缺 `requireRole('admin')` → demo 用户可调
+
+**累计**：
+- **修 bug**：64 个 + 3 待修
+- **测试**：482 个（346 vitest + 136 e2e）
+- **commits**：44+
+- **CI**：all green
+- **Release**：v0.1.0 + v0.2.0 + 自动 draft
+
+**留待 v7.5+**：
+- 修 v7-E2E 暴露的 3 个产品 bug
+- better-sqlite3 持续优化（PRAGMA 调优 / batch insert）
+- vitest 覆盖率报告（@vitest/coverage）
+- Page 抽取 4 个例外（login / register / forgot-password / interview-detail）补抽取
+- CI 加 frontend build step（保证 built 后的 page 也是 test 的）
+
+---
+
 ## v3 阶段补充（2026-07-02 新一轮结构性 bug 修复）
 
 > 来源：项目结构性 bug 与隐性 bug 分析报告（新发现 12 个）

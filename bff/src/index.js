@@ -30,6 +30,8 @@ app.set('trust proxy', 'loopback');
 
 app.use('/shared', express.static(path.join(projectRoot, 'shared'), { maxAge: '1h' }));
 app.use('/partials', express.static(path.join(projectRoot, 'partials'), { maxAge: '1h' }));
+// Phase 3: esbuild 输出优先（bff/public/pages），原 pages 目录作为 fallback
+app.use('/pages', express.static(path.join(__dirname, '..', 'public', 'pages'), { maxAge: '1h', extensions: ['html'] }));
 app.use('/pages', express.static(path.join(projectRoot, 'pages'), { maxAge: 0, extensions: ['html'] }));
 
 app.use(helmet({
@@ -76,7 +78,10 @@ app.use('/api/v1', routes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-db.init().then(async () => {
+// init() 现在是同步（better-sqlite3）
+try {
+  db.init();
+
   app.listen(config.port, () => {
     console.log(`\n🚀 ERP BFF running on http://localhost:${config.port}`);
     console.log(`📊 API base: http://localhost:${config.port}/api/v1`);
@@ -88,18 +93,20 @@ db.init().then(async () => {
   // v1.1: BFF 启动时扫描过期的推荐（3 天前推荐无反馈 → pending_feedback + 创建跟进 task）
   // 可通过 REMINDER_SCAN=false 关闭（生产用外部 cron 调度）
   if (String(process.env.REMINDER_SCAN || 'true').toLowerCase() !== 'false') {
-    try {
-      const recRouter = require('./routes/recommendations');
-      // ===== P0-NEW-3 修复：await 启动 scan（函数现在返回 Promise + mutex 串行化）=====
-      const result = await recRouter.scanOverdueRecommendations();
-      if (result.processed > 0) {
-        console.log(`⏰ Reminder scan: ${result.processed} overdue recommendation(s) processed, ${result.tasks_created} follow-up task(s) created`);
-      } else {
-        console.log(`⏰ Reminder scan: 0 overdue (all clear)`);
+    // ===== P0-NEW-3 修复：scanOverdueRecommendations 现在是 Promise + mutex 串行化 =====
+    Promise.resolve().then(async () => {
+      try {
+        const recRouter = require('./routes/recommendations');
+        const result = await recRouter.scanOverdueRecommendations();
+        if (result.processed > 0) {
+          console.log(`⏰ Reminder scan: ${result.processed} overdue recommendation(s) processed, ${result.tasks_created} follow-up task(s) created`);
+        } else {
+          console.log(`⏰ Reminder scan: 0 overdue (all clear)`);
+        }
+      } catch (e) {
+        console.error('Reminder scan failed:', e.message);
       }
-    } catch (e) {
-      console.error('Reminder scan failed:', e.message);
-    }
+    });
   } else {
     console.log('⏰ Reminder scan: skipped (REMINDER_SCAN=false)');
   }
@@ -127,9 +134,9 @@ db.init().then(async () => {
     }
   }
   // ===== 修复结束 =====
-}).catch(err => {
+} catch (err) {
   console.error('Failed to initialize database:', err);
   process.exit(1);
-});
+}
 
 module.exports = app;

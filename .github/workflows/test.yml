@@ -22,6 +22,12 @@ jobs:
           cache: 'npm'
           cache-dependency-path: bff/package-lock.json
 
+      - name: Cache BFF native modules (better-sqlite3)
+        uses: actions/cache@v4
+        with:
+          path: bff/node_modules/better-sqlite3/build
+          key: ${{ runner.os }}-better-sqlite3-${{ hashFiles('bff/package-lock.json') }}
+
       - name: Install BFF deps
         working-directory: bff
         run: npm ci

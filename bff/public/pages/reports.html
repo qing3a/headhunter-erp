@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据报表</title>
+  <link rel="stylesheet" href="../shared/shared.css">
+  <script src="../shared/auth.js"></script>
+  <script src="../shared/loading.js"></script>
+  <script src="../shared/router.js"></script>
+  <script src="../shared/api.js"></script>
+  <style id="pageStyle">
+    .reports-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+    .reports-toolbar .days-select { padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; }
+
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .kpi-card { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; }
+    .kpi-card .label { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 6px; }
+    .kpi-card .value { font-size: 28px; font-weight: 600; color: var(--color-primary); }
+    .kpi-card .delta { font-size: 12px; color: var(--color-text-tertiary); margin-top: 4px; }
+
+    .section { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .section h3 { margin: 0 0 16px 0; font-size: 16px; font-weight: 600; }
+
+    /* 漏斗 */
+    .funnel { display: flex; flex-direction: column; gap: 8px; }
+    .funnel-row { display: flex; align-items: center; gap: 12px; }
+    .funnel-row .label { width: 80px; font-size: 13px; flex-shrink: 0; }
+    .funnel-row .bar-wrap { flex: 1; height: 28px; background: var(--color-bg-page-secondary, #f5f5f5); border-radius: 4px; overflow: hidden; position: relative; }
+    .funnel-row .bar { height: 100%; background: var(--color-primary); display: flex; align-items: center; justify-content: flex-end; padding: 0 8px; color: #fff; font-size: 12px; font-weight: 500; transition: width 0.3s; }
+    .funnel-row .bar.stage-1 { background: #0d9488; }
+    .funnel-row .bar.stage-2 { background: #14b8a6; }
+    .funnel-row .bar.stage-3 { background: #5eead4; color: #134e4a; }
+    .funnel-row .bar.stage-4 { background: #ccfbf1; color: #134e4a; }
+    .funnel-row .count { width: 60px; text-align: right; font-size: 13px; flex-shrink: 0; }
+    .funnel-row .rate { width: 60px; text-align: right; font-size: 12px; color: var(--color-text-secondary); flex-shrink: 0; }
+
+    /* 状态分布 */
+    .status-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .status-row { display: flex; align-items: center; gap: 12px; }
+    .status-row .label { width: 90px; font-size: 13px; flex-shrink: 0; }
+    .status-row .bar-wrap { flex: 1; height: 20px; background: var(--color-bg-page-secondary, #f5f5f5); border-radius: 4px; overflow: hidden; }
+    .status-row .bar { height: 100%; background: var(--color-primary-light); }
+    .status-row .count { width: 50px; text-align: right; font-size: 13px; flex-shrink: 0; }
+
+    /* 顾问 Top */
+    .consultant-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .consultant-table th, .consultant-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--color-border-light); }
+    .consultant-table th { color: var(--color-text-secondary); font-weight: 500; font-size: 12px; background: var(--color-bg-page-secondary); }
+    .consultant-table tr.rank-1 td:first-child { color: #f59e0b; font-weight: 600; }
+    .consultant-table tr.rank-2 td:first-child { color: #94a3b8; font-weight: 600; }
+    .consultant-table tr.rank-3 td:first-child { color: #b45309; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div id="pageContent">
+    <div class="reports-toolbar">
+      <span style="color:var(--color-text-secondary);font-size:13px;">时间范围：</span>
+      <select id="daysSelect" class="days-select">
+        <option value="7">最近 7 天</option>
+        <option value="30" selected>最近 30 天</option>
+        <option value="90">最近 90 天</option>
+        <option value="365">最近 1 年</option>
+      </select>
+    </div>
+
+    <!-- KPI 卡片 -->
+    <div class="kpi-grid" id="kpiGrid">
+      <div class="kpi-card"><div class="label">总候选人</div><div class="value" data-kpi="totalCandidates">--</div></div>
+      <div class="kpi-card"><div class="label">本月推荐</div><div class="value" data-kpi="monthlyRecommendations">--</div></div>
+      <div class="kpi-card"><div class="label">面试中</div><div class="value" data-kpi="activeInterviews">--</div></div>
+      <div class="kpi-card"><div class="label">本月入职</div><div class="value" data-kpi="monthlyHires">--</div></div>
+    </div>
+
+    <!-- 招聘漏斗 -->
+    <div class="section">
+      <h3>招聘漏斗 <span id="funnelRange" style="color:var(--color-text-secondary);font-size:13px;font-weight:normal;"></span></h3>
+      <div class="funnel" id="funnelEl"></div>
+    </div>
+
+    <!-- 候选人状态分布 -->
+    <div class="section">
+      <h3>候选人状态分布</h3>
+      <div class="status-grid" id="statusGrid"></div>
+    </div>
+
+    <!-- 顾问产能 Top -->
+    <div class="section">
+      <h3>顾问产能 Top <span id="consultantRange" style="color:var(--color-text-secondary);font-size:13px;font-weight:normal;"></span></h3>
+      <table class="consultant-table">
+        <thead>
+          <tr><th>#</th><th>顾问</th><th>推荐数</th><th>面试中</th><th>已入职</th><th>入职率</th></tr>
+        </thead>
+        <tbody id="consultantTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script type="module" src="./reports.js"></script>
+  <script src="../shared/shared.js"></script>
+  <script src="../shared/layout.js"></script>
+</body>
+</html>
