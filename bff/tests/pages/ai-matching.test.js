@@ -11,6 +11,10 @@ describe('ai-matching page', () => {
       },
       candidates: { list: vi.fn() },
       recommendations: { create: vi.fn() },
+      aiMatching: {
+        matchCandidate: vi.fn(),
+        matchJob: vi.fn(),
+      },
     };
     globalThis.UI = {
       showToast: vi.fn(),
