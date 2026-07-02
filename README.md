@@ -1,5 +1,7 @@
 # headhunter-erp
 
+[![test](https://github.com/qing3a/headhunter-erp/actions/workflows/test.yml/badge.svg)](https://github.com/qing3a/headhunter-erp/actions/workflows/test.yml)
+
 > 猎头公司 ERP 系统（候选人 / 职位 / 推荐 / 客户 / 标签 / 报表）
 
 ## 项目简介
@@ -243,3 +245,66 @@ Internal use only.
 
 项目维护：[项目维护者]
 问题反馈：开 Issue 或联系维护者
+
+## Development
+
+### 依赖
+
+| 工具 | 版本 | 用途 |
+|---|---|---|
+| Node.js | 22.x | CI / 本地运行（`.github/workflows/test.yml`）|
+| npm | 随 Node | 装依赖 |
+| Chrome / Edge | 任意 | 手动验证前端 |
+
+### 首次运行
+
+```bash
+cd bff
+npm install     # 装依赖
+npm start       # 默认监听 3001，首次启动自动建表 + seed
+```
+
+启动后会自动创建 `bff/data/erp.db`、建表 + 索引、写入 demo seed：
+**5 candidates + 5 jobs + 6 tasks + 3 interviews**。
+
+### 跑测试
+
+| 类型 | 命令 | 用例数 | 前置条件 |
+|---|---|---|---|
+| vitest 单测 | `cd bff && npm test` | 270 | 无 |
+| E2E 脚本 | `cd bff && npm run e2e` | 40+ | BFF 启在 3001 |
+
+### CI
+
+push 到 `main` 触发 GitHub Actions（`.github/workflows/test.yml`）：
+
+[![test](https://github.com/qing3a/headhunter-erp/actions/workflows/test.yml/badge.svg)](https://github.com/qing3a/headhunter-erp/actions/workflows/test.yml)
+
+### 数据库
+
+BFF 用 **sql.js**（纯 JS SQLite，内存 + 文件持久化）：
+
+- 首次启动自动建表 + 索引
+- 文件落地在 `bff/data/erp.db`
+- 重置：删 `bff/data/erp.db*` + 重启
+- 不支持并发写（单连接）
+
+### 默认账号
+
+| 账号 | 密码 | 权限 |
+|---|---|---|
+| `admin` | `admin123` | 看全部 / 管理 / 删 |
+| `demo` | `demo123` | 只看自己创建的候选人 / 推荐 |
+
+### E2E runner 原理（`bff/tests/e2e-runner.js`）
+
+- **每个脚本前重启 BFF**：避免 rate-limit 累积 + 状态污染
+- **drain BFF stdout**：避免 morgan 日志 pipe 阻塞导致 BFF 卡死
+- **脚本间 sleep 1.5s**：避免 `tokens_invalidated_after` 同秒竞态（JWT 撤销时间戳精度为 1s）
+
+### 已知限制
+
+- **单进程 / 单连接**：BFF 单进程、sql.js 单连接，**无水平扩展**，不适合高并发生产
+- **rate-limit**：`/auth/login` 10/15min，`/candidates/import/*` 10/hour（IP 级）
+- **候选人池搜索**：`LIKE %k%` 走全表扫，>1k 候选人时明显变慢；建议加 FTS5 索引
+- **morgan 日志**：必须 drain stdout，否则 pipe 满后 BFF 阻塞
