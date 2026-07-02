@@ -102,21 +102,28 @@
       mainList.innerHTML = html;
     }
 
-    // 系统组（settings）：复用 partial 里的占位 a
-    cfg.forEach(function (group) {
-      if (group.group !== 'system') return;
-      (group.items || []).forEach(function (item) {
-        if (!isVisible(item)) return;
-        var anchor = document.querySelector('.shell-sidebar [data-nav-key="' + item.key + '"]');
-        if (anchor) {
-          anchor.setAttribute('href', item.path);
-          var labelNode = anchor.querySelector('span');
-          var iconNode = anchor.querySelector('i');
-          if (labelNode) labelNode.textContent = item.label;
-          if (iconNode) iconNode.setAttribute('data-lucide', item.icon);
-        }
+    // 系统组（settings + tags）：完全由 JS 渲染，不再依赖 partial 占位
+    var systemContainer = document.querySelector('[data-dom-id="sidebar-system"]');
+    if (systemContainer) {
+      // 找到 user-info div（保留为最底部）
+      var userInfoEl = systemContainer.querySelector('.flex.items-center.gap-3.px-4');
+      var sysHtml = '';
+      cfg.forEach(function (group) {
+        if (group.group !== 'system') return;
+        (group.items || []).forEach(function (item) {
+          if (!isVisible(item)) return;
+          sysHtml += '<a href="' + escapeHtml(item.path) + '" class="nav-item" data-nav-key="' + escapeHtml(item.key) + '">' +
+                    '<i data-lucide="' + escapeHtml(item.icon) + '" class="nav-icon"></i>' +
+                    '<span>' + escapeHtml(item.label) + '</span>' +
+                    '</a>';
+        });
       });
-    });
+      if (userInfoEl) {
+        userInfoEl.insertAdjacentHTML('beforebegin', sysHtml);
+      } else {
+        systemContainer.insertAdjacentHTML('afterbegin', sysHtml);
+      }
+    }
   }
 
   function setPageTitle(title) {
