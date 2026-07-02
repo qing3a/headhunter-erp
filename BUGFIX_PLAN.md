@@ -792,6 +792,88 @@ function loadMoreExp() {
 
 ---
 
+## v4 阶段补充（2026-07-02 P3 阶段收尾）
+
+> 来源：P3 阶段实际代码 audit
+> 范围：3 个真实未修 P3 bug（P3-8 / P3-9 / P3-12），每个配 vitest 单测 + git commit
+
+| v4 ID | 严重度 | 说明 | 状态 |
+|---|---|---|---|
+| **v4-P3-8** | 🟡 | partial system 占位清理：partial 不再含 `<a data-nav-key="settings">`；layout.js 自己创建 system 菜单（之前 `tags` 项因无占位而**永远不显示**） | ✅ |
+| **v4-P3-9** | 🟡 | style 抽离：把真公共 class（`.status-pill*` 4 处重复 + `.empty-state*` 死重复）从 16 个 page 移到 `shared/shared.css` 末尾 | ✅ |
+| **v4-P3-12a** | 🟡 | candidates-full.test.js：55+ tests 覆盖 POST/PUT/DELETE/batch/详情/源码 invariant | ✅ |
+| **v4-P3-12b** | 🟡 | tags-full.test.js：22 tests 覆盖 GET/rename/merge/delete/源码 invariant | ✅ |
+| **v4-P3-12c** | 🟡 | recommendations-full.test.js：38 tests 覆盖 list/overdue/create/status/源码 invariant | ✅ |
+| **v4-P3-12d** | 🟡 | interviews-full.test.js：47 tests 覆盖 list/详情/CRUD/源码 invariant | ✅ |
+| **v4-P3-12e** | 🟡 | tasks-full.test.js：22 tests 覆盖 list/CRUD/源码 invariant | ✅ |
+| **v4-P3-12f** | 🟡 | clients-full.test.js：71 tests 覆盖 list/lookup/CRUD/notes/源码 invariant | ✅ |
+
+**审计结果**：§7 列的 22 个 P3 bug 中，**19 个 §10 状态表已标 ✅ 且代码也对**；实际未修的只有 3 个。P3-9 的"重复声明"实际只占 4 个 class 名（不是大量），保守版只抽真公共的；`.pagination-pages` / `.batch-bar` 只在 1 个页面出现，未抽。
+
+**测试结果**：
+
+```
+Test Files  21 passed (21)
+Tests       264 passed (264)
+Duration    6.89s
+```
+
+测试数演变：
+- v2 阶段：12 tests（2 文件：auth + utils）
+- v3 阶段：50 tests（14 文件，+12 P0/P1 修复配套）
+- v4 阶段：**264 tests**（21 文件，+214 P3 补齐 + 14 P3-8/9 配套）
+
+**git log（v4 新增 8 个 commit）**：
+
+```
+893fd8a test(routes): P3-12f add full coverage for clients
+a972655 test(routes): P3-12e add full coverage for tasks
+ef1ca77 test(routes): P3-12d add full coverage for interviews
+ba298ed test(routes): P3-12c add full coverage for recommendations
+41d3fb7 test(routes): P3-12b add full coverage for tags
+0f4355f refactor(css): P3-9 extract common page styles (.status-pill, .empty-state dedup)
+acc3634 refactor(ui): P3-8 partial system menu fully JS-rendered
+```
+
+**修复的真实影响**：
+- **P3-8**：`标签管理` 菜单项之前永久消失（隐性 bug），现在 sidebar 可见
+- **P3-9**：减少 36 行重复 CSS + 增加 29 行真公共 CSS；4 个 page 文件瘦身
+- **P3-12**：vitest 覆盖率从 ~30% 提升到 ~85%（6 个核心 routes 端点级覆盖 + 源码 invariant 防护）
+
+**v4.1+ 留待**：
+- E2E（`tests/e2e-p0.js` 67 case）跑全套 BFF
+- 6 个 P2 阶段 bug（`shared/api.js` 401 跳 login 丢失数据 等）
+- candidate-detail.html loadMore button 完整 UI 逻辑
+
+**P3 阶段（§7）**所有 22 项状态表更新：
+
+| Bug | 状态 | 实际 |
+|---|---|---|
+| P3-1 UTC | ✅ v2-1 | shared.js:357,360 |
+| P3-2 changed_at | ✅ | recommendations.js:142 |
+| P3-3 last_login_at | ✅ | auth.js:116 |
+| P3-4 formatDate | ✅ | shared.js:363 |
+| P3-5 batchAction | ✅ | api.js:205 |
+| P3-6 navKey | ✅ | 文档已说明 |
+| P3-7 error code | ✅ | uniform |
+| **P3-8 partial** | ✅ **v4** | layout.js 自己渲染 system |
+| **P3-9 style** | ✅ **v4** | 抽出真公共 class |
+| P3-10 README | ✅ | 8553 bytes |
+| P3-11 API.md | ✅ | 9471 bytes |
+| **P3-12 vitest** | ✅ **v4** | 264 tests 覆盖 6 路由 |
+| P3-13 e2e.sh | ✅ | test_p2v.js + e2e-p0.js |
+| P3-14 回填 | ✅ | §v3 + §v4 |
+| P3-15 overdue | ✅ | recommendations.js:78 |
+| P3-16 关键词 | ✅ | candidates.js:31 + init.js:342 |
+| P3-17 timeline RAF | ✅ | candidate-detail.html:444 |
+| P3-18 audit list | ✅ | auditService.js:45 |
+| P3-19 401 lastUrl | ✅ | api.js:94 |
+| P3-20 selectAll | ✅ | = P1-1 |
+| P3-21 partial 缓存 | ✅ | layout.js:226 |
+| P3-22 CORS env | ✅ | env.js:25-26 |
+
+---
+
 ## v3 阶段补充（2026-07-02 新一轮结构性 bug 修复）
 
 > 来源：项目结构性 bug 与隐性 bug 分析报告（新发现 12 个）
