@@ -89,6 +89,20 @@ async function init() {
     createTables();
     await seedUsersIfNeeded();
     console.log('💾 Database initialized at', STATE.dbPath);
+
+    // ===== v6.6 启动 monitor：检测 FTS5 可用性 =====
+    try {
+      const ftsCheck = STATE.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='candidates_fts'`).get();
+      if (ftsCheck) {
+        console.log('✅ FTS5 candidates_fts 虚拟表已就绪（sql.js 启用 FTS5）');
+      } else {
+        console.warn('⚠️  FTS5 不可用：候选人池 keyword 查询走 LIKE（>1k 候选人可能慢）');
+        console.warn('   升级路径见 docs/fts5-upgrade.md');
+      }
+    } catch (e) {
+      console.warn('⚠️  FTS5 检测失败:', e.message);
+    }
+    // ===== 监控结束 =====
   })();
   return STATE.initPromise;
 }
