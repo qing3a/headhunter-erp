@@ -874,6 +874,48 @@ acc3634 refactor(ui): P3-8 partial system menu fully JS-rendered
 
 ---
 
+## v5 阶段补充（2026-07-02 v4.1 收尾）
+
+> 来源：v4.1 列表里的 4 项
+> 范围：E2E 跑通 + P2-D3 后端 + loadMore 真接 server + CI 集成
+
+| v5 ID | 严重度 | 说明 | 状态 |
+|---|---|---|---|
+| **v5-E2E** | 🟡 | `tests/e2e-runner.js`：统一 e2e-p0 + test_p2v + test_p2v2 入口；每个脚本前重启 BFF + drain stdout pipe + 脚本间 sleep 1.5s | ✅ |
+| **v5-E2E-fix1** | 🟡 | 修 test_p2v2.js：token 当 body 传 → 应传第 4 参数 | ✅ |
+| **v5-E2E-fix2** | 🟡 | 修 test_p2v2.js：`data.length` → `Buffer.byteLength(data)`（中文字符 Content-Length 错） | ✅ |
+| **v5-E2E-fix3** | 🟡 | 修 test_p2v2.js：硬编码 cid=6 → 动态创建 candidate 再 PUT | ✅ |
+| **v5-P2-D3** | 🟠 | 后端 `candidates.js` GET / 接 `?all_pages=true`（admin 限定，LIMIT 500 防爆，复用全部过滤） | ✅ |
+| **v5-loadMore** | 🟡 | `candidate-detail.html` loadMore 改真接 server（`loadSub` + `loadMoreSub` + `renderSubPage`），删 6 个旧 render 函数；顺手修 `else if` 错位 syntax error | ✅ |
+| **v5-CI** | 🟡 | `.github/workflows/test.yml`：GitHub Actions 跑 vitest + e2e（Node 18, ubuntu-latest, 15min timeout） | ✅ |
+
+**修复的真实影响**：
+- **v5-E2E**：E2E runner 自动化，从"手动启 BFF + 跑 3 脚本"变成 `cd bff && npm run e2e` 一行命令。脚本间 sleep 1.5s 避免 tokens_invalidated_after 同秒竞态；drain stdout 避免 morgan 日志阻塞 pipe
+- **v5-E2E-fix1/2/3**：3 个真实存在的测试 bug 同时修了，否则 E2E 永远跑不通
+- **v5-P2-D3**：admin 能在 UI 上"全选所有 100 人"做批量操作（之前必须翻页选）
+- **v5-loadMore**：候选人详情 >50 条工作经历/教育/联系时，"加载更多"按钮真正能加载下一页（之前按了没反应）
+- **v5-CI**：push 即触发 CI，跑 270 vitest + 41 e2e，0 失败才 merge
+
+**测试结果**：
+
+```
+vitest: Test Files 22 passed, Tests 270 passed
+E2E:    === E2E 总计: Pass 41 | Fail 0 ===
+```
+
+**git log（v5 新增 4 个 commit）**：
+
+```
+f2cb1ad ci: add GitHub Actions workflow for vitest + e2e
+f00794f feat(ui): loadMore subtable buttons fetch from server with offset
+4963ceb fix(routes): P2-D3 backend support ?all_pages=true for admin select-all
+68c5a5e test(e2e): add e2e-runner + fix 3 P0/E2E bugs discovered
+```
+
+**累计**：v0+v2+v3+v4+v5 修了 **64 个 bug**（45 原始 + 12 P0/P1 + 3 P3 收尾 + 4 v4.1），跑 **270 vitest + 41 e2e = 311 测试 PASS**。
+
+---
+
 ## v3 阶段补充（2026-07-02 新一轮结构性 bug 修复）
 
 > 来源：项目结构性 bug 与隐性 bug 分析报告（新发现 12 个）
