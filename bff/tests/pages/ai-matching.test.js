@@ -11,6 +11,10 @@ describe('ai-matching page', () => {
       },
       candidates: { list: vi.fn() },
       recommendations: { create: vi.fn() },
+      aiMatching: {
+        matchCandidate: vi.fn().mockResolvedValue({ ok: true, data: { matches: [] } }),
+        matchJob: vi.fn().mockResolvedValue({ ok: true, data: { matches: [] } }),
+      },
     };
     globalThis.UI = {
       showToast: vi.fn(),

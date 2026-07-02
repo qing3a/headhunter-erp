@@ -23,5 +23,7 @@ router.use('/tags', require('./tags'));
 router.use('/reports', require('./reports'));
 router.use('/imports', require('./imports'));
 router.use('/clients', require('./clients'));
+// ===== v8 新增：AI 匹配路由 =====
+router.use('/ai-matching', require('./aiMatching'));
 
 module.exports = router;

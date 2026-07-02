@@ -151,18 +151,26 @@
       function doMatch() {
         var jobId = parseInt(document.getElementById('jobSelect').value);
         if (!jobId) { window.UI.showToast({ type: 'warning', title: '提示', message: '请先选择职位' }); return; }
-        window.API.jobs.get(jobId).then(function (r) {
-          if (!r || !r.ok) return;
-          currentJob = r.data;
+        var w = getWeights();
+        var total_w = w.industry + w.position + w.city + w.salary + w.experience + w.education;
+        if (total_w === 0) { window.UI.showToast({ type: 'warning', title: '提示', message: '请至少设置一项权重' }); return; }
+        // ===== v8 重构：调后端 AI 匹配 API，不再 client-side 计算 =====
+        window.API.jobs.get(jobId).then(function (jr) {
+          if (!jr || !jr.ok) return;
+          currentJob = jr.data;
           if (!allCandidates.length) { window.UI.showToast({ type: 'info', title: '提示', message: '暂无候选人可匹配' }); return; }
-          var w = getWeights();
-          var total_w = w.industry + w.position + w.city + w.salary + w.experience + w.education;
-          if (total_w === 0) { window.UI.showToast({ type: 'warning', title: '提示', message: '请至少设置一项权重' }); return; }
-          var results = allCandidates.map(function (c) {
-            return Object.assign({ c: c }, scoreCandidate(c, currentJob, w));
-          }).filter(function (r) { return r.total > 0; });
-          results.sort(function (a, b) { return b.total - a.total; });
-          renderResults(results.slice(0, 12));
+          var candidateIds = allCandidates.map(function (c) { return c.id; });
+          window.API.aiMatching.matchJob(jobId, { candidateIds: candidateIds, weights: w }).then(function (r) {
+            if (r && r.ok) {
+              // 把后端 {candidate, score, breakdown} 转换成前端期望的 {c, total, parts}
+              var results = (r.data.matches || []).map(function (m) {
+                return { c: m.candidate, total: m.score, parts: m.breakdown };
+              });
+              renderResults(results);
+            } else {
+              window.UI.showToast({ type: 'error', title: '匹配失败', message: (r && r.error && r.error.message) || '未知错误' });
+            }
+          });
         });
       }
 
