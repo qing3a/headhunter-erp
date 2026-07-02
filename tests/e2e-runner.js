@@ -16,9 +16,17 @@ const SCRIPTS = [
   path.join(ROOT, 'tests', 'e2e-p0.js'),
   path.join(BFF, 'test_p2v.js'),
   path.join(BFF, 'test_p2v2.js'),
+  // ===== Phase 2: 5 个 E2E 边界 case 文件 (50 case) =====
+  path.join(BFF, 'tests', 'e2e-edge', 'concurrency.test.js'),
+  path.join(BFF, 'tests', 'e2e-edge', 'error-paths.test.js'),
+  path.join(BFF, 'tests', 'e2e-edge', 'auth-boundary.test.js'),
+  path.join(BFF, 'tests', 'e2e-edge', 'resources.test.js'),
+  path.join(BFF, 'tests', 'e2e-edge', 'data-integrity.test.js'),
 ];
 
 function killPort(port) {
+  // ===== E2E 兼容：Windows 沙盒（无 netstat/taskkill）回退到 node 原生 =====
+  // 优先用 netstat + taskkill（旧路径，CI/用户本地正常），失败回退 ps + process.kill
   try {
     const out = execSync(
       `netstat -ano | findstr ":${port}" | findstr "LISTENING"`,
@@ -28,8 +36,23 @@ function killPort(port) {
     for (const pid of pids) {
       try { execSync(`taskkill /F /PID ${pid}`, { stdio: 'pipe' }); } catch (e) {}
     }
+    return;
   } catch (e) {
-    // port 未占用
+    // netstat 不可用，回退到 ps + process.kill
+  }
+  // 回退：用 node 内置 child_process 执行 PowerShell 或 wmic 找 PID
+  try {
+    const out = execSync(
+      `powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess"`,
+      { encoding: 'utf8', stdio: 'pipe' }
+    );
+    const pids = out.split('\n').map(s => s.trim()).filter(Boolean);
+    for (const pid of pids) {
+      try { process.kill(parseInt(pid, 10), 'SIGTERM'); } catch (e) {}
+      try { process.kill(parseInt(pid, 10), 'SIGKILL'); } catch (e) {}
+    }
+  } catch (e) {
+    // 也无 powershell，留空（端口可能空闲或权限不足）
   }
 }
 
