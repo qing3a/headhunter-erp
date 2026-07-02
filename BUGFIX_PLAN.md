@@ -1214,6 +1214,72 @@ b9d39e7 (v0.1.0 tag) + release notes
 - i18n + 多语言（如果需要商业化）
 - Docker 化 + 部署指南（生产就绪度从 4/10 → 6/10）
 
+---
+
+## v8 阶段（2026-07-02 routes 覆盖率 + AI 匹配）
+
+> 来源：v7.5 后待办
+> 范围：routes 测试覆盖 + AI 匹配实现
+
+| v8 ID | 说明 | 状态 | commit |
+|---|---|---|---|
+| **v8-A-supertest** | 11 routes supertest 集成测试（77 case）+ `_helpers.js` / `_seed.js` 共享 setup（mock auth + 真 JWT 注入） | ✅ | e42416c (PR #3) |
+| **v8-A-coverage** | routes/* 覆盖率 0% → 75.77%（reports 100% / tags 94.77% / tasks 93.84% / interviews 92.2% / candidates 49.7%） | ✅ | e42416c |
+| **v8-B-ai-service** | `bff/src/services/aiMatchingService.js`：6 维度加权（行业/职位/城市/薪资/经验/学历） | ✅ | 0623dbb (PR #4) |
+| **v8-B-ai-route** | `bff/src/routes/aiMatching.js`：POST `/ai-matching/candidate/:id/match` + `/job/:id/match`（限 50 结果） | ✅ | 0623dbb |
+| **v8-B-ai-frontend** | `pages/ai-matching.html`：重构 `doMatch` 调 API（替代 client-side 计算） | ✅ | 0623dbb |
+| **v8-B-ai-test** | 15 vitest（aiMatchingService 6 维度全覆盖）+ 5 E2E（ai-matching API） | ✅ | 0623dbb |
+| **v8-B-ai-fix** | v7 page test 加 `api.aiMatching` mock（CI regression fix，2 个 commit） | ✅ | 367c353 + e3af41f |
+
+**测试数演变**：
+
+| 阶段 | vitest | E2E | 总数 |
+|---|---|---|---|
+| v2 | 12 | 0 | 12 |
+| v3 | 50 | 0 | 50 |
+| v4 | 264 | 41 | 305 |
+| v5 | 270 | 40 | 310 |
+| v6 | 277 | 85 | 362 |
+| v6.5 | 305 | 85 | 390 |
+| v7 | 346 | 138 | 484 |
+| v7.5 | 363 | 139 | 502 |
+| **v8** | **440** | **144** | **584** |
+
+**v8 关键 commit**：
+- `e42416c` PR #3 supertest（77 case, routes/* 75.77%）
+- `0623dbb` PR #4 AI matching（20 test）
+- `367c353` + `e3af41f` mock 修复
+
+**性能（v7 + v7.5 + v8 累计）**：
+- 1000 candidates insert: **86ms**（v6 1000ms+ → 12x）
+- FTS5 keyword query: **1ms**（v6 200ms → 200x）
+- AI matching 1000 候选 × 100 职位: < 50ms（同步 API + 索引）
+- 启动: **<1s**
+
+**累计**（含 v0-v8）：
+- **修 bug**：67 个 + 1 AI 匹配功能
+- **测试**：584 个（440 vitest + 144 e2e）
+- **commits**：59+
+- **CI**：all green
+- **Release**：v0.1.0 + v0.2.0 + v0.3.0 + **v0.4.0**（即将）
+- **覆盖率**：total 73% / routes/* 76%（v0 阶段 0% → v8 阶段 73%）
+
+**留待 v9+**：
+- candidates 49% 覆盖率提升（拆 supertest 更多 case）
+- i18n + 多语言
+- Docker 化 + 部署指南
+- 真实 ML 匹配（向量 / 嵌入）替代关键词
+
+## v8 PR 状态
+- **PR #3** (v8-A supertest)：MERGED ✅
+- **PR #4** (v8-B AI matching)：MERGED ✅
+- release-drafter 自动更新 v0.4.0 draft
+
+## 下一步建议
+1. **发布 v0.4.0**（含 v8 全部变更）
+2. **candidates 覆盖率提升**（v8.5）
+3. **i18n / Docker / 部署**（v9 商业化预备）
+
 ## v7.5 PR 状态
 - **PR #1** (v7 大改造)：OPEN @ `feature/v6.6-fts5-release-drafter`
 - **PR #2** (v7.5): 即将开（`feature/v7.5-bugs-ci-coverage`）
