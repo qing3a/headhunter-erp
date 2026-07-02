@@ -282,8 +282,8 @@ npm start       # 默认监听 3001，首次启动自动建表 + seed
 
 | 类型 | 命令 | 用例数 | 前置条件 |
 |---|---|---|---|
-| vitest 单测 | `cd bff && npm test` | 270 | 无 |
-| E2E 脚本 | `cd bff && npm run e2e` | 40+ | BFF 启在 3001 |
+| vitest 单测 | `cd bff && npm test` | 346 | 无 |
+| E2E 脚本 | `cd bff && npm run e2e` | 136 | BFF 启在 3001（runner 自启） |
 
 ### CI
 
@@ -293,12 +293,31 @@ push 到 `main` 触发 GitHub Actions（`.github/workflows/test.yml`）：
 
 ### 数据库
 
-BFF 用 **sql.js**（纯 JS SQLite，内存 + 文件持久化）：
+BFF 用 **better-sqlite3**（同步 N-API SQLite，WAL + FK 约束）：
 
 - 首次启动自动建表 + 索引
 - 文件落地在 `bff/data/erp.db`
 - 重置：删 `bff/data/erp.db*` + 重启
-- 不支持并发写（单连接）
+- **支持并发写**（WAL 模式 + 同步 API）
+- 内置 FTS5 全文检索（候选人 / 职位 / 客户）
+- 性能：1000 candidate 批量 insert ~86ms（事务批），FTS5 keyword 查询 1ms
+
+### Frontend Build
+
+页面通过 esbuild 抽取 + 打包：
+
+```bash
+cd bff
+node frontend-build.js
+```
+
+输出到 `bff/public/pages/`（HTML shell 5KB + 逻辑 IIFE bundle）。
+
+BFF static 路由优先级：
+- 优先 `bff/public/pages/`（build 输出）
+- fallback `pages/`（未 build 时直接用原 HTML）
+
+CI 用 `pages/`（没 build step），本地 build 后测试用 `public/pages/`。
 
 ### 默认账号
 
@@ -315,7 +334,7 @@ BFF 用 **sql.js**（纯 JS SQLite，内存 + 文件持久化）：
 
 ### 已知限制
 
-- **单进程 / 单连接**：BFF 单进程、sql.js 单连接，**无水平扩展**，不适合高并发生产
+- **单进程**：BFF 单进程 + better-sqlite3 单连接（WAL 允许多读单写），**无水平扩展**，不适合高并发生产
 - **rate-limit**：`/auth/login` 10/15min，`/candidates/import/*` 10/hour（IP 级）
-- **候选人池搜索**：`LIKE %k%` 走全表扫，>1k 候选人时明显变慢；建议加 FTS5 索引
+- **候选人池搜索**：v7 起走 FTS5 全文索引，>10k 候选人 keyword 查询仍 <5ms
 - **morgan 日志**：必须 drain stdout，否则 pipe 满后 BFF 阻塞
