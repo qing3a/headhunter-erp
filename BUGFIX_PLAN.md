@@ -1041,6 +1041,67 @@ b9d39e7 (v0.1.0 tag) + release notes
 
 ---
 
+## v6.6 阶段补充（2026-07-02 FTS5 路径 / Branch Protection / Release Drafter）
+
+> 来源：v6.6 列表（3 项）
+> 范围：FTS5 升级文档化 + main 分支保护 + release notes 自动化
+
+| v6.6 ID | 严重度 | 说明 | 状态 |
+|---|---|---|---|
+| **v6.6-FTS5-doc** | 🟡 | `docs/fts5-upgrade.md`：3 种升级路径分析（sql.js 2.x / 自 build WASM / better-sqlite3）+ 决策矩阵 + 推荐 | ✅ |
+| **v6.6-FTS5-check** | 🟡 | `bff/scripts/check-fts5.js`：独立 FTS5 检测脚本（CI + 本地可跑，exit code 反映可用性） | ✅ |
+| **v6.6-FTS5-monitor** | 🟡 | `bff/src/db/init.js` 启动 monitor：检测 `candidates_fts` 虚拟表存在性，console.warn 提示升级路径 | ✅ |
+| **v6.6-Branch-Protection** | 🟡 | main 分支保护（gh api PUT）：require status check `test` + 1 PR approval + dismiss stale + 禁 force push / 禁删分支 | ✅ |
+| **v6.6-Release-Drafter** | 🟡 | `.github/release-drafter.yml` + `.github/workflows/release-drafter.yml`：自动从 PR label 生成 release notes（breaking/feature/bug/docs/test/chore 分组） | ✅ |
+
+**关键成果**：
+- **FTS5 升级文档化**：3 种路径完整分析；推荐短期等 sql.js 2.x，中期迁 better-sqlite3
+- **FTS5 check 脚本**：CI 可独立跑，exit code 反映 FTS5 可用性（当前 sql.js 1.14.1 = exit 1）
+- **Branch protection 已设**：`required_status_checks.contexts: ["test"]` + `required_approving_review_count: 1` + `allow_force_pushes: false`
+- **Release Drafter**：push to main 自动更新 draft release（按 label 分组）；手动 publish 即成正式 release
+
+**Branch protection API 响应**（v6.6 设置后）：
+```json
+{
+  "required_status_checks": { "strict": true, "contexts": ["test"] },
+  "required_pull_request_reviews": {
+    "dismiss_stale_reviews": true,
+    "required_approving_review_count": 1
+  },
+  "enforce_admins": false,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}
+```
+
+**Release Drafter 配置**：
+- `breaking` label → major 版本
+- `feature` / `enhancement` label → minor 版本
+- 其他 → patch（默认）
+- 6 个分类：Breaking / Features / Bug Fixes / Docs / Tests / Maintenance
+- changelog 格式：`- $TITLE (#$NUMBER) @$AUTHOR`
+
+**累计测试**：仍 390 PASS（v6.6 不动产品代码）
+
+**git log（v6.6 1 commit）**：
+
+```
+3796030 docs: add FTS5 upgrade path + startup monitor (sql.js 1.14.1 fallback)
+```
+
+（含 release-drafter.yml 改动，等待 push 完成）
+
+**累计**（含 v0-v6.6）：
+- **修 bug**：64 个
+- **测试**：390 个（305 vitest + 85 e2e）
+- **commits**：40 个
+- **CI**：all green
+- **Release**：v0.1.0 + v0.2.0
+- **PR 工作流**：PR template + CONTRIBUTING + branch protection + release-drafter
+- **文档**：API.md + README.md + BUGFIX_PLAN.md + CONTRIBUTING.md + docs/fts5-upgrade.md
+
+---
+
 ## v3 阶段补充（2026-07-02 新一轮结构性 bug 修复）
 
 > 来源：项目结构性 bug 与隐性 bug 分析报告（新发现 12 个）

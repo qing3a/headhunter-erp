@@ -1,0 +1,20 @@
+# .github/workflows/release-drafter.yml
+# 监听 main 分支 push，自动更新 GitHub Releases Draft
+# 配置见 .github/release-drafter.yml
+
+name: Release Drafter
+
+on:
+  push:
+    # main 分支 push 触发（PR merge 时）
+    branches: [main]
+  # 也可手动触发
+  workflow_dispatch:
+
+jobs:
+  update_release_draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
