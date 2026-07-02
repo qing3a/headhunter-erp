@@ -256,24 +256,64 @@
         document.getElementById('profileTags').innerHTML = tagsHtml;
       }
 
-      // ===== P1-6 修复：子表分页渲染（每次 50 条）=====
+      // ===== v4.1 修复：subtable 分页改 fetch 模式（不是客户端 slice）=====
       var SUB_PAGE_SIZE = 50;
-      var subState = { exp: { all: [], offset: 0 }, edu: { all: [], offset: 0 }, contact: { all: [], offset: 0 } };
+      var subState = {
+        exp: { items: [], offset: 0, hasMore: true, candidateId: null },
+        edu: { items: [], offset: 0, hasMore: true, candidateId: null },
+        contact: { items: [], offset: 0, hasMore: true, candidateId: null }
+      };
 
-      function renderExperiences(list) {
-        subState.exp.all = list || [];
-        subState.exp.offset = 0;
-        renderExperiencesPage();
+      function apiName(type) {
+        return type === 'exp' ? 'listExperiences' : type === 'edu' ? 'listEducations' : 'listContacts';
       }
-      function renderExperiencesPage() {
-        var s = subState.exp;
-        var visible = s.all.slice(0, s.offset + SUB_PAGE_SIZE);
-        document.getElementById('expCount').textContent = s.all.length ? '· ' + s.all.length : '';
-        var c = document.getElementById('experienceList');
-        if (!visible.length) { c.innerHTML = '<div class="empty-sub">暂无工作经历</div>'; updateMoreBar('exp'); return; }
-        c.innerHTML = visible.map(expItemHtml).join('');
-        updateMoreBar('exp');
+
+      function loadSub(type, candidateId) {
+        // 初次加载：清空 + 拉第一页
+        var s = subState[type];
+        s.candidateId = candidateId;
+        s.items = [];
+        s.offset = 0;
+        s.hasMore = true;
+        var bar = document.getElementById(type + 'MoreBar');
+        if (bar) bar.style.display = 'none';
+        window.API.candidates[apiName(type)](candidateId, { limit: SUB_PAGE_SIZE, offset: 0 })
+          .then(function (r) {
+            if (r && r.ok) {
+              s.items = (r.data || []).slice();
+              s.offset = s.items.length;
+              s.hasMore = s.items.length >= SUB_PAGE_SIZE;
+              renderSubPage(type);
+            }
+          });
       }
+
+      function loadMoreSub(type) {
+        var s = subState[type];
+        if (!s.hasMore) return;
+        window.API.candidates[apiName(type)](s.candidateId, { limit: SUB_PAGE_SIZE, offset: s.offset })
+          .then(function (r) {
+            if (r && r.ok) {
+              var appended = (r.data || []).slice();
+              s.items = s.items.concat(appended);
+              s.offset += appended.length;
+              s.hasMore = appended.length >= SUB_PAGE_SIZE;
+              renderSubPage(type);
+            }
+          });
+      }
+
+      function renderSubPage(type) {
+        var s = subState[type];
+        var listId = type === 'exp' ? 'experienceList' : type === 'edu' ? 'educationList' : 'contactList';
+        var emptyText = type === 'exp' ? '暂无工作经历' : type === 'edu' ? '暂无教育背景' : '暂无联系记录';
+        var c = document.getElementById(listId);
+        if (!s.items.length) { c.innerHTML = '<div class="empty-sub">' + emptyText + '</div>'; updateMoreBar(type); return; }
+        c.innerHTML = s.items.map(type === 'exp' ? expItemHtml : type === 'edu' ? eduItemHtml : contactItemHtml).join('');
+        updateMoreBar(type);
+      }
+      // ===== v4.1 修复结束 =====
+
       function expItemHtml(e) {
         return '<div class="sub-item" data-id="' + e.id + '">' +
           '<div class="sub-content">' +
@@ -288,23 +328,8 @@
               '<button class="btn-link danger" data-act="delete">删除</button>' +
             '</div>' +
           '</div>';
-        }).join('');
       }
 
-      function renderEducations(list) {
-        subState.edu.all = list || [];
-        subState.edu.offset = 0;
-        renderEducationsPage();
-      }
-      function renderEducationsPage() {
-        var s = subState.edu;
-        var visible = s.all.slice(0, s.offset + SUB_PAGE_SIZE);
-        document.getElementById('eduCount').textContent = s.all.length ? '· ' + s.all.length : '';
-        var c = document.getElementById('educationList');
-        if (!visible.length) { c.innerHTML = '<div class="empty-sub">暂无教育背景</div>'; updateMoreBar('edu'); return; }
-        c.innerHTML = visible.map(eduItemHtml).join('');
-        updateMoreBar('edu');
-      }
       function eduItemHtml(e) {
         return '<div class="sub-item" data-id="' + e.id + '">' +
           '<div class="sub-content">' +
@@ -319,20 +344,6 @@
         '</div>';
       }
 
-      function renderContacts(list) {
-        subState.contact.all = list || [];
-        subState.contact.offset = 0;
-        renderContactsPage();
-      }
-      function renderContactsPage() {
-        var s = subState.contact;
-        var visible = s.all.slice(0, s.offset + SUB_PAGE_SIZE);
-        document.getElementById('contactCount').textContent = s.all.length ? '· ' + s.all.length : '';
-        var c = document.getElementById('contactList');
-        if (!visible.length) { c.innerHTML = '<div class="empty-sub">暂无联系记录</div>'; updateMoreBar('contact'); return; }
-        c.innerHTML = visible.map(contactItemHtml).join('');
-        updateMoreBar('contact');
-      }
       function contactItemHtml(e) {
         return '<div class="sub-item" data-id="' + e.id + '">' +
           '<div class="sub-content">' +
@@ -353,19 +364,9 @@
         var bar = document.getElementById(type + 'MoreBar');
         var hint = document.getElementById(type + 'MoreHint');
         if (!bar) return;
-        if (s.all.length === 0) { bar.style.display = 'none'; return; }
-        var shown = s.offset + SUB_PAGE_SIZE;
-        if (shown >= s.all.length) {
-          bar.style.display = 'none';
-        } else {
-          bar.style.display = '';
-          if (hint) hint.textContent = '已显示 ' + Math.min(shown, s.all.length) + ' / ' + s.all.length;
-        }
-      }
-      function loadMoreSub(type, renderPage) {
-        var s = subState[type];
-        s.offset += SUB_PAGE_SIZE;
-        renderPage();
+        if (!s.hasMore) { bar.style.display = 'none'; return; }
+        bar.style.display = '';
+        if (hint) hint.textContent = '已显示 ' + s.items.length + '，点击加载更多';
       }
 
       function recStatusLabel(s) {
@@ -813,9 +814,10 @@
           document.getElementById('detailContainer').style.display = '';
           renderHeader(current);
           renderBasic(current);
-          renderExperiences(current.experiences || []);
-          renderEducations(current.educations || []);
-          renderContacts(current.contacts || []);
+          // P1-NEW-5 + v4.1 修复：subtable 改 fetch 模式
+          loadSub('exp', candidateId);
+          loadSub('edu', candidateId);
+          loadSub('contact', candidateId);
           renderRecommendations(current.recommendations || []);
           renderTimeline(current);
         });
@@ -858,14 +860,15 @@
             if (act === 'add-experience') openExperienceModal(null);
             else if (act === 'add-education') openEducationModal(null);
             else if (act === 'add-contact') openContactModal(null);
-
-        // ===== P1-6 修复：3 个"加载更多"按钮 =====
-        on('expMoreBtn', 'click', function () { loadMoreSub('exp', renderExperiencesPage); });
-        on('eduMoreBtn', 'click', function () { loadMoreSub('edu', renderEducationsPage); });
-        on('contactMoreBtn', 'click', function () { loadMoreSub('contact', renderContactsPage); });
             else if (act === 'add-recommendation') openRecModal(null);
           });
         });
+
+        // ===== P1-6 修复：3 个"加载更多"按钮 =====
+        // v4.1 修复：loadMore button 真接 server（offset 累加 + append），不再客户端 slice
+        on('expMoreBtn', 'click', function () { loadMoreSub('exp'); });
+        on('eduMoreBtn', 'click', function () { loadMoreSub('edu'); });
+        on('contactMoreBtn', 'click', function () { loadMoreSub('contact'); });
 
         bindSubListEvents();
       }
