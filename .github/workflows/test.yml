@@ -1,0 +1,37 @@
+# .github/workflows/test.yml
+# Vitest (单元) + E2E (BFF 启停) 集成
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: bff/package-lock.json
+
+      - name: Install BFF deps
+        working-directory: bff
+        run: npm ci
+
+      - name: Run vitest
+        working-directory: bff
+        run: npm test
+
+      - name: Run E2E
+        working-directory: bff
+        env:
+          CI: 'true'
+        run: npm run e2e
