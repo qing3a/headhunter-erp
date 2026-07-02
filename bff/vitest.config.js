@@ -8,5 +8,8 @@ export default defineConfig({
     fileParallelism: false,
     testTimeout: 30000,
     hookTimeout: 30000,
+    // ===== Phase 1+2：e2e-edge 脚本是裸脚本（用 http.request 连 BFF），不是 vitest 单元 =====
+    // 单独由 `npm run e2e` 跑（通过 tests/e2e-runner.js）
+    exclude: ['**/node_modules/**', '**/tests/e2e-edge/**', '**/dist/**'],
   },
 });
