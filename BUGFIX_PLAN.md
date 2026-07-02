@@ -975,6 +975,72 @@ c17dc01 docs: add Development section to README with CI badge + e2e instructions
 
 ---
 
+## v6.5 阶段补充（2026-07-02 PR 流程 / Release / 前端测试 / 性能）
+
+> 来源：v6.5 列表（4 项：PR 流程 + release tag + 前端 vitest + 性能优化）
+> 范围：仓库流程规范化 + v0.1.0/v0.2.0 release + happy-dom 测 shared/ utilities + overdue 复合索引
+
+| v6.5 ID | 严重度 | 说明 | 状态 |
+|---|---|---|---|
+| **v6.5-PR** | 🟡 | `.github/PULL_REQUEST_TEMPLATE.md`（PR 模板） + `CONTRIBUTING.md`（贡献指南） + `feature/example-pr-demo` 分支（流程演示） | ✅ |
+| **v6.5-Release** | 🟡 | git tag v0.1.0（45 原始 bug）+ v0.2.0（64 总 bug + 362 测试）+ GitHub Release | ✅ |
+| **v6.5-SharedTest** | 🟡 | `bff/tests/shared/` 加 4 个文件 20 case（auth/storage/layout/api 核心）覆盖 IIFE 模式 utility（用 happy-dom env） | ✅ |
+| **v6.5-OverdueIdx** | 🟡 | `init.js` 加 `idx_rec_status_change (status, last_status_change_at)` + `idx_rec_status_recommend (status, recommend_at)` 帮助 overdue 查询走索引 | ✅ |
+| **v6.5-FTS5** | 🟠 | 候选人 FTS5 全文搜索：sql.js 1.10 WASM **不含 FTS5 模块**，自动降级到 LIKE 路径（overdue 索引仍生效，candidates.js 检测 `globalThis.__FTS_AVAILABLE__` 走对应分支） | ⚠️ 降级 |
+
+**关键发现**：
+- **sql.js 1.10.3 不支持 FTS5**（`no such module: fts5`）—— 主动降级避免破坏现有功能
+- **shared/ 都是 IIFE 模式**（不 export）—— vitest 测试必须 `await import(...)` 后通过 `window.Auth` / `window.API` 访问
+- **happy-dom vs jsdom**：用 happy-dom（更快，1.6MB 更小）—— 装 devDep 不影响产品
+
+**累计测试演变**：
+
+| 阶段 | vitest | E2E | 总数 |
+|---|---|---|---|
+| v2 | 12 | 0 | 12 |
+| v3 | 50 | 0 | 50 |
+| v4 | 264 | 41 | 305 |
+| v5 | 270 | 40 | 310 |
+| v6 | 277 | 85 | 362 |
+| **v6.5** | **305** | **85** | **390** |
+
+**v6.5 4 个 CI 跑全 PASS**：
+- v6.5 docs: ✅ 32s
+- v6.5 PR template: ✅ 29s
+- v6.5 shared test: ✅ 37s
+- v6.5 FTS5 + overdue idx: ✅ 31s
+
+**git log（v6.5 新增 commit）**：
+
+```
+c7f805a perf(db): add overdue composite indexes + FTS5 full-text search for candidates
+a27843d test(shared): add vitest utility tests for auth/storage/layout/api (happy-dom)
+b9d39e7 (v0.2.0 tag)
+b9d39e7 (v0.1.0 tag) + release notes
+76b905d ci: add PR template + CONTRIBUTING.md + PR workflow section in README
+```
+
+**Release**：
+- v0.1.0: https://github.com/qing3a/headhunter-erp/releases/tag/v0.1.0
+- v0.2.0: https://github.com/qing3a/headhunter-erp/releases/tag/v0.2.0 (latest)
+
+**累计**（含 v0-v6.5）：
+- **修 bug**：64 个
+- **测试**：390 个（305 vitest + 85 e2e）
+- **commit**：38 个
+- **CI**：5 个 PR runs 全 green
+- **文档**：API.md + README.md + BUGFIX_PLAN.md + CONTRIBUTING.md
+- **Release**：v0.1.0 + v0.2.0
+- **PR 工作流**：PULL_REQUEST_TEMPLATE + CONTRIBUTING + feature/example-pr-demo
+
+**剩余留待**：
+- FTS5 升级路径：等 sql.js 出 FTS5-enabled WASM build 后零代码激活
+- 18 page vitest（仍不建议做，依赖全局变量太多）
+- release 自动化（release-drafter）—— 当前手动 gh release create
+- branch protection rules（GitHub UI 配）—— 需 main 必须 CI PASS 才 merge
+
+---
+
 ## v3 阶段补充（2026-07-02 新一轮结构性 bug 修复）
 
 > 来源：项目结构性 bug 与隐性 bug 分析报告（新发现 12 个）
