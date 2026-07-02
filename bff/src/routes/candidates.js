@@ -21,10 +21,45 @@ router.use(requireAuth);
 router.get('/', asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize) || 20));
-  const offset = (page - 1) * pageSize;
   const { keyword, status, city, source_channel, education_level, industry,
           years_min, years_max, salary_min, salary_max, tag,
           has_recommendation, sort } = req.query;
+
+  // ===== P2-D3 修复：admin 全选所有页（返回所有候选 ID，受过滤条件限制）=====
+  // admin 限定：避免 consultant 跨用户拉全表（性能/隐私问题）
+  // limit 500：防爆；500 已经够 99% 业务场景
+  if (req.query.all_pages === 'true' && req.user.role === 'admin') {
+    const dbAll = getDb();
+    const whereAll = ['c.deleted_at IS NULL'];
+    const paramsAll = [];
+    if (keyword && String(keyword).trim().length >= 2) {
+      whereAll.push('(c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR c.current_company LIKE ?)');
+      const kw = `%${keyword}%`;
+      paramsAll.push(kw, kw, kw, kw);
+    }
+    if (status) { whereAll.push('c.status = ?'); paramsAll.push(status); }
+    if (city) { whereAll.push('c.current_city = ?'); paramsAll.push(city); }
+    if (source_channel) { whereAll.push('c.source_channel = ?'); paramsAll.push(source_channel); }
+    if (education_level) { whereAll.push('c.education_level = ?'); paramsAll.push(education_level); }
+    if (industry) { whereAll.push('c.expected_industry = ?'); paramsAll.push(industry); }
+    if (tag) {
+      whereAll.push('EXISTS (SELECT 1 FROM candidate_tags ct2 WHERE ct2.candidate_id = c.id AND ct2.deleted_at IS NULL AND instr(ct2.tags, ?) > 0)');
+      paramsAll.push('"' + String(tag).replace(/"/g, '') + '"');
+    }
+    if (has_recommendation === 'true') {
+      whereAll.push('EXISTS (SELECT 1 FROM recommendations r WHERE r.candidate_id = c.id AND r.deleted_at IS NULL)');
+    } else if (has_recommendation === 'false') {
+      whereAll.push('NOT EXISTS (SELECT 1 FROM recommendations r WHERE r.candidate_id = c.id AND r.deleted_at IS NULL)');
+    }
+    const whereSqlAll = 'WHERE ' + whereAll.join(' AND ');
+    const ids = dbAll.prepare(
+      `SELECT id FROM candidates c ${whereSqlAll} ORDER BY c.updated_at DESC LIMIT 500`
+    ).all(...paramsAll);
+    return res.json(success({ ids: ids.map(r => r.id), total: ids.length }, {}));
+  }
+  // ===== P2-D3 修复结束 =====
+
+  const offset = (page - 1) * pageSize;
   // ===== v2-3 (P3-16) 修复：关键词长度限制 =====
   // LIKE '%k%' 不能用 B-tree 索引（通配符在左 → 全表扫）
   // 限制 keyword 长度 ≥ 2 避免单字符通配扫大表
