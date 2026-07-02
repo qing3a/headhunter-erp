@@ -40,9 +40,7 @@ function t(name, cond, info) { if (cond) { pass++; console.log('OK  | ' + name +
   t('GET candidates/abc → 400', e4.code === 400, 'code=' + e4.code);
 
 // Case 5: POST /imports/commit 缺 mapping → 400
-  // Bug 记录：当前实现不校验 mapping 是否缺失（req.body.mapping 缺失则 mapping={} 通过校验），
-  // 实际产品行为：mapping={} 走到 importService.commitImport，因文件非 Excel → 500 (JSZip 抛错)。
-  // 期望修复后：400 VALIDATION_ERROR；当前接受 4xx/500（不抛 5xx 异常）。
+  // v7.5 Bug 1 修复：mapping={} 现在校验 Object.keys.length === 0 → 400 VALIDATION_ERROR
   const e5body = Buffer.from('not-really-an-excel-but-test-mapping');
   const e5 = await new Promise((res) => {
     const boundary = '----e5' + Date.now();
@@ -56,11 +54,10 @@ function t(name, cond, info) { if (cond) { pass++; console.log('OK  | ' + name +
     r.write(body);
     r.end();
   });
-  t('POST imports/commit 缺 mapping（产品现状: 500；期望 400）', e5.code === 400 || e5.code === 500, 'code=' + e5.code + ' (bug: 缺 mapping 时 mapping={} 通过校验)');
+  t('POST imports/commit 缺 mapping → 400 VALIDATION_ERROR', e5.code === 400 && e5.body.error && e5.body.error.code === 'VALIDATION_ERROR', 'code=' + e5.code + ' (v7.5 修复后: 400)');
 
   // Case 6: POST /imports/commit 上传非 Excel 文件 → 400
-  // Bug 记录：importService.commitImport 抛 JSZip 异常未被 try-catch，路由层 → 500 INTERNAL_ERROR。
-  // 期望修复后：400 VALIDATION_ERROR '文件格式错误'；当前 500。
+  // v7.5 Bug 2 修复：catch 分支识别 zip/file/excel 关键字 → 400 '文件格式错误'
   const e6 = await new Promise((res) => {
     const boundary = '----e6' + Date.now();
     const parts = [];
@@ -73,7 +70,7 @@ function t(name, cond, info) { if (cond) { pass++; console.log('OK  | ' + name +
     r.write(body);
     r.end();
   });
-  t('POST imports/commit 非 Excel（产品现状: 500；期望 4xx）', e6.code === 400 || e6.code === 500, 'code=' + e6.code + ' (bug: JSZip 抛错未被捕获)');
+  t('POST imports/commit 非 Excel → 400 VALIDATION_ERROR', e6.code === 400 && e6.body.error && e6.body.error.code === 'VALIDATION_ERROR', 'code=' + e6.code + ' (v7.5 修复后: 400)');
 
   // Case 7: POST /auth/login 缺 username → 400
   const e7 = await req('POST', '/auth/login', { password: 'admin123' });

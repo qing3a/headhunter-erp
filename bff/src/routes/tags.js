@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
+const { requireRole } = require('../middleware/permission');
 const { success, pagination } = require('../utils/response');
 const { badRequest, notFound, conflict } = require('../utils/errors');
 const auditService = require('../services/auditService');
@@ -152,7 +153,7 @@ router.delete('/:tag', withTagsLock(async (req, res) => {
   res.json(success({ tag: tagName, removed: removed }));
 }));
 
-router.post('/merge', withTagsLock(async (req, res) => {
+router.post('/merge', requireRole('admin'), withTagsLock(async (req, res) => {
   const { from, to } = req.body || {};
   if (!Array.isArray(from) || from.length === 0) throw badRequest('from 必填且非空数组');
   if (!to || !String(to).trim()) throw badRequest('to 必填');
