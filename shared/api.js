@@ -429,5 +429,20 @@
     }
   });
 
+  api.aiMatching = makeNs({
+    matchCandidate: function (candidateId, opts) {
+      return api._request('/ai-matching/candidate/' + encodeURIComponent(candidateId) + '/match', {
+        method: 'POST',
+        body: { job_ids: opts && opts.jobIds, weights: opts && opts.weights }
+      }).then(function (r) { return api._unwrap(r); });
+    },
+    matchJob: function (jobId, opts) {
+      return api._request('/ai-matching/job/' + encodeURIComponent(jobId) + '/match', {
+        method: 'POST',
+        body: { candidate_ids: opts && opts.candidateIds, weights: opts && opts.weights }
+      }).then(function (r) { return api._unwrap(r); });
+    }
+  });
+
   window.API = api;
 })();
