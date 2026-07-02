@@ -258,6 +258,363 @@ async function main() {
     assert(/Audit cleanup/.test(log), 'BFF log missing audit cleanup line');
   });
 
+  // === 基础功能扩展 (jobs/clients CRUD) ===
+  console.log('\n[基础功能扩展]');
+
+  // P0-3 已经改密并还原，旧 token 失效，需要重新登录拿新 token
+  await test('P0 后重新登录 admin', async () => {
+    // 等超过 1 秒，确保新 token 的 iat > invalidAtSec（SQLite 精度只到秒，用 <= 校验）
+    await new Promise(r => setTimeout(r, 1500));
+    adminToken = await loginAdmin();
+    assert(adminToken && adminToken.length > 10);
+  });
+
+  // === jobs CRUD ===
+  await test('jobs 列表 admin 看全部', async () => {
+    const r = await req('GET', '/api/v1/jobs?pageSize=5', adminToken);
+    assert(r.status === 200);
+    assert(Array.isArray(r.body.data));
+    assert(r.body.data.length >= 1);
+  });
+
+  await test('jobs 创建', async () => {
+    const r = await req('POST', '/api/v1/jobs', adminToken, { title: 'E2E 测试职位', city: '北京' });
+    assert(r.status === 200, `create: ${r.status} ${JSON.stringify(r.body)}`);
+    assert(r.body.data.id > 0);
+  });
+
+  await test('jobs 创建 title 必填校验', async () => {
+    const r = await req('POST', '/api/v1/jobs', adminToken, { city: '北京' });
+    assert(r.body.ok === false);
+    assert(r.body.error.code === 'VALIDATION_ERROR');
+  });
+
+  await test('jobs 详情', async () => {
+    const r = await req('GET', '/api/v1/jobs?pageSize=1', adminToken);
+    const jobId = r.body.data[0].id;
+    const r2 = await req('GET', `/api/v1/jobs/${jobId}`, adminToken);
+    assert(r2.status === 200);
+    assert(r2.body.data.id === jobId);
+  });
+
+  await test('jobs 更新（PUT）', async () => {
+    const r = await req('POST', '/api/v1/jobs', adminToken, { title: '更新测试' });
+    const id = r.body.data.id;
+    const r2 = await req('PUT', `/api/v1/jobs/${id}`, adminToken, { status: 'closed' });
+    assert(r2.status === 200);
+    assert(r2.body.data.status === 'closed');
+  });
+
+  await test('jobs 删除（软删）', async () => {
+    const r = await req('POST', '/api/v1/jobs', adminToken, { title: '删除测试' });
+    const id = r.body.data.id;
+    const r2 = await req('DELETE', `/api/v1/jobs/${id}`, adminToken);
+    assert(r2.status === 200);
+    const r3 = await req('GET', `/api/v1/jobs/${id}`, adminToken);
+    assert(r3.status === 404);
+  });
+
+  await test('jobs lookup 端点（只 active 状态）', async () => {
+    const r = await req('GET', '/api/v1/jobs/lookup', adminToken);
+    assert(r.status === 200);
+    r.body.data.forEach(j => assert(j.status !== 'closed'));
+  });
+
+  await test('jobs keyword 搜索', async () => {
+    const r = await req('GET', '/api/v1/jobs?keyword=字节&pageSize=5', adminToken);
+    assert(r.status === 200);
+  });
+
+  // === clients CRUD ===
+  await test('clients 列表', async () => {
+    const r = await req('GET', '/api/v1/clients?pageSize=5', adminToken);
+    assert(r.status === 200);
+    assert(Array.isArray(r.body.data));
+  });
+
+  await test('clients 创建 name 必填', async () => {
+    const r = await req('POST', '/api/v1/clients', adminToken, { industry: '互联网' });
+    assert(r.body.ok === false);
+  });
+
+  await test('clients 详情 + notes', async () => {
+    const r = await req('POST', '/api/v1/clients', adminToken, { name: 'E2E Client' });
+    const id = r.body.data.id;
+    const r2 = await req('GET', `/api/v1/clients/${id}`, adminToken);
+    assert(r2.status === 200);
+    assert(Array.isArray(r2.body.data.notes));
+  });
+
+  await test('clients 加 note', async () => {
+    const r = await req('POST', '/api/v1/clients', adminToken, { name: 'C' });
+    const id = r.body.data.id;
+    const r2 = await req('POST', `/api/v1/clients/${id}/notes`, adminToken, { content: 'first note' });
+    assert(r2.status === 200);
+    assert(r2.body.data.content === 'first note');
+  });
+
+  await test('clients 软删后 GET 404', async () => {
+    const r = await req('POST', '/api/v1/clients', adminToken, { name: 'X' });
+    const id = r.body.data.id;
+    await req('DELETE', `/api/v1/clients/${id}`, adminToken);
+    const r2 = await req('GET', `/api/v1/clients/${id}`, adminToken);
+    assert(r2.status === 404);
+  });
+
+  await test('clients 级联软删 notes', async () => {
+    const r = await req('POST', '/api/v1/clients', adminToken, { name: 'Y' });
+    const id = r.body.data.id;
+    await req('POST', `/api/v1/clients/${id}/notes`, adminToken, { content: 'n1' });
+    await req('POST', `/api/v1/clients/${id}/notes`, adminToken, { content: 'n2' });
+    await req('DELETE', `/api/v1/clients/${id}`, adminToken);
+    const r2 = await req('GET', `/api/v1/clients/${id}/notes`, adminToken);
+    assert(r2.body.data.length === 0);
+  });
+
+  await test('clients lookup 端点', async () => {
+    const r = await req('GET', '/api/v1/clients/lookup', adminToken);
+    assert(r.status === 200);
+  });
+
+  // === 推荐/任务/面试 CRUD ===
+  console.log('\n[推荐/任务/面试 CRUD]');
+
+  // === recommendations ===
+  await test('recommendations 创建', async () => {
+    const c = await req('POST', '/api/v1/candidates', adminToken, { name: 'rec test', email: 'r_' + Date.now() + '@x.com' });
+    const cid = c.body.data.id;
+    const r = await req('POST', '/api/v1/recommendations', adminToken, { candidate_id: cid, job_title: 'P5' });
+    assert(r.status === 200);
+    assert(r.body.data.id > 0);
+  });
+
+  await test('recommendations candidate_id 必填', async () => {
+    const r = await req('POST', '/api/v1/recommendations', adminToken, { job_title: 'P5' });
+    assert(r.body.ok === false);
+  });
+
+  await test('recommendations job.status=closed 拒', async () => {
+    const c = await req('POST', '/api/v1/candidates', adminToken, { name: 'rec closed test', email: 'rc_' + Date.now() + '@x.com' });
+    const cid = c.body.data.id;
+    const j = await req('POST', '/api/v1/jobs', adminToken, { title: 'E2E closed job' });
+    const jid = j.body.data.id;
+    await req('PUT', `/api/v1/jobs/${jid}`, adminToken, { status: 'closed' });
+    const r = await req('POST', '/api/v1/recommendations', adminToken, { candidate_id: cid, job_id: jid });
+    assert(r.body.ok === false);
+    assert(r.body.error.message.includes('关闭'));
+  });
+
+  await test('recommendations 状态流转：recommended → pending_feedback', async () => {
+    const c = await req('POST', '/api/v1/candidates', adminToken, { name: 'rec flow', email: 'rf_' + Date.now() + '@x.com' });
+    const cid = c.body.data.id;
+    const r = await req('POST', '/api/v1/recommendations', adminToken, { candidate_id: cid, job_title: 'P5' });
+    const rid = r.body.data.id;
+    const r2 = await req('POST', `/api/v1/recommendations/${rid}/status`, adminToken, { to_status: 'pending_feedback', note: '客户反馈中' });
+    assert(r2.status === 200);
+    assert(r2.body.data.status === 'pending_feedback');
+  });
+
+  await test('recommendations 非法流转：recommended → hired 拒', async () => {
+    const c = await req('POST', '/api/v1/candidates', adminToken, { name: 'rec illegal', email: 'ri_' + Date.now() + '@x.com' });
+    const cid = c.body.data.id;
+    const r = await req('POST', '/api/v1/recommendations', adminToken, { candidate_id: cid, job_title: 'P5' });
+    const rid = r.body.data.id;
+    const r2 = await req('POST', `/api/v1/recommendations/${rid}/status`, adminToken, { to_status: 'hired', note: 'skip' });
+    assert(r2.body.ok === false);
+    assert(r2.body.error.message.includes('不能流转'));
+  });
+
+  await test('recommendations 软删', async () => {
+    const c = await req('POST', '/api/v1/candidates', adminToken, { name: 'rec delete', email: 'rd_' + Date.now() + '@x.com' });
+    const cid = c.body.data.id;
+    const r = await req('POST', '/api/v1/recommendations', adminToken, { candidate_id: cid, job_title: 'P5' });
+    const rid = r.body.data.id;
+    const r2 = await req('DELETE', `/api/v1/recommendations/${rid}`, adminToken);
+    assert(r2.status === 200);
+  });
+
+  await test('recommendations overdue 列表', async () => {
+    const r = await req('GET', '/api/v1/recommendations/overdue', adminToken);
+    assert(r.status === 200);
+    assert(Array.isArray(r.body.data));
+  });
+
+  // === tasks ===
+  await test('tasks 列表', async () => {
+    const r = await req('GET', '/api/v1/tasks?pageSize=5', adminToken);
+    assert(r.status === 200);
+  });
+
+  await test('tasks 创建', async () => {
+    const r = await req('POST', '/api/v1/tasks', adminToken, { title: 'E2E task', priority: 'high' });
+    assert(r.status === 200);
+    assert(r.body.data.id > 0);
+  });
+
+  await test('tasks title 必填', async () => {
+    const r = await req('POST', '/api/v1/tasks', adminToken, { priority: 'low' });
+    assert(r.body.ok === false);
+  });
+
+  await test('tasks 软删', async () => {
+    const r = await req('POST', '/api/v1/tasks', adminToken, { title: 'to del' });
+    const id = r.body.data.id;
+    const r2 = await req('DELETE', `/api/v1/tasks/${id}`, adminToken);
+    assert(r2.status === 200);
+    const r3 = await req('GET', '/api/v1/tasks?pageSize=100', adminToken);
+    const found = r3.body.data.find(t => t.id === id);
+    assert(found === undefined);
+  });
+
+  // === interviews ===
+  await test('interviews 列表', async () => {
+    const r = await req('GET', '/api/v1/interviews?pageSize=5', adminToken);
+    assert(r.status === 200);
+  });
+
+  await test('interviews 创建 candidate_name 必填', async () => {
+    const r = await req('POST', '/api/v1/interviews', adminToken, { job_title: 'P5' });
+    assert(r.body.ok === false);
+  });
+
+  await test('interviews 创建成功', async () => {
+    const r = await req('POST', '/api/v1/interviews', adminToken, { candidate_name: 'E2E IV', scheduled_at: '2027-01-01 10:00' });
+    assert(r.status === 200);
+    assert(r.body.data.id > 0);
+  });
+
+  // === tags 端到端 ===
+  console.log('\n[tags 端到端]');
+
+  await test('tags 列表', async () => {
+    const r = await req('GET', '/api/v1/tags', adminToken);
+    assert(r.status === 200);
+    assert(Array.isArray(r.body.data));
+  });
+
+  await test('tags 给候选人加 tag', async () => {
+    const c = await req('POST', '/api/v1/candidates', adminToken, { name: 'tag test', email: 'tt_' + Date.now() + '@x.com' });
+    const cid = c.body.data.id;
+    const r = await req('PUT', `/api/v1/candidates/${cid}/tags`, adminToken, { tags: ['vip', 'urgent'] });
+    assert(r.status === 200);
+    const r2 = await req('GET', `/api/v1/candidates/${cid}`, adminToken);
+    assert(JSON.stringify(r2.body.data.tags) === JSON.stringify(['vip', 'urgent']));
+  });
+
+  await test('tags 重命名', async () => {
+    const c = await req('POST', '/api/v1/candidates', adminToken, { name: 'rename test', email: 'rn_' + Date.now() + '@x.com' });
+    const cid = c.body.data.id;
+    await req('PUT', `/api/v1/candidates/${cid}/tags`, adminToken, { tags: ['oldname'] });
+    const r = await req('PUT', `/api/v1/tags/${encodeURIComponent('oldname')}/rename`, adminToken, { new_name: 'newname' });
+    assert(r.status === 200);
+    assert(r.body.data.updated >= 1);
+  });
+
+  await test('tags 删除（从候选人 tags 数组移除）', async () => {
+    const c = await req('POST', '/api/v1/candidates', adminToken, { name: 'tag del', email: 'td_' + Date.now() + '@x.com' });
+    const cid = c.body.data.id;
+    await req('PUT', `/api/v1/candidates/${cid}/tags`, adminToken, { tags: ['toremove'] });
+    const r = await req('DELETE', `/api/v1/tags/${encodeURIComponent('toremove')}`, adminToken);
+    assert(r.status === 200);
+    assert(r.body.data.removed >= 1);
+  });
+
+  await test('tags 搜索精确匹配（不命中子串）', async () => {
+    const c1 = await req('POST', '/api/v1/candidates', adminToken, { name: '精确测试 A', email: 'exact_a_' + Date.now() + '@x.com' });
+    const c2 = await req('POST', '/api/v1/candidates', adminToken, { name: '精确测试 AB', email: 'exact_b_' + Date.now() + '@x.com' });
+    await req('PUT', `/api/v1/candidates/${c1.body.data.id}/tags`, adminToken, { tags: ['精确'] });
+    await req('PUT', `/api/v1/candidates/${c2.body.data.id}/tags`, adminToken, { tags: ['精确子串'] });
+    const r = await req('GET', `/api/v1/tags/${encodeURIComponent('精确')}/candidates`, adminToken);
+    assert(r.status === 200);
+    const ids = r.body.data.map(c => c.id);
+    assert(ids.includes(c1.body.data.id));
+    assert(!ids.includes(c2.body.data.id));
+  });
+
+  await test('tags 合并（merge）', async () => {
+    const c = await req('POST', '/api/v1/candidates', adminToken, { name: 'merge', email: 'merge_' + Date.now() + '@x.com' });
+    const cid = c.body.data.id;
+    await req('PUT', `/api/v1/candidates/${cid}/tags`, adminToken, { tags: ['taga', 'tagb'] });
+    const r = await req('POST', '/api/v1/tags/merge', adminToken, { from: ['taga', 'tagb'], to: 'merged' });
+    assert(r.status === 200);
+    assert(r.body.data.updated >= 1);
+  });
+
+  await test('candidates 列表 tag 过滤', async () => {
+    const uniqueTag = 'uniquetag_' + Date.now();
+    const c = await req('POST', '/api/v1/candidates', adminToken, { name: 'tag filter', email: 'tf_' + Date.now() + '@x.com' });
+    await req('PUT', `/api/v1/candidates/${c.body.data.id}/tags`, adminToken, { tags: [uniqueTag] });
+    const r = await req('GET', `/api/v1/candidates?tag=${encodeURIComponent(uniqueTag)}`, adminToken);
+    assert(r.status === 200);
+  });
+
+  // === 批处理 / 报表 / 鉴权 ===
+  console.log('\n[批处理 / 报表 / 鉴权]');
+
+  await test('candidates batch tag 批量加', async () => {
+    const c1 = await req('POST', '/api/v1/candidates', adminToken, { name: 'batch1', email: 'b1_' + Date.now() + '@x.com' });
+    const c2 = await req('POST', '/api/v1/candidates', adminToken, { name: 'batch2', email: 'b2_' + Date.now() + '@x.com' });
+    const r = await req('POST', '/api/v1/candidates/batch', adminToken, {
+      action: 'tag',
+      ids: [c1.body.data.id, c2.body.data.id],
+      params: { tag: 'batchtag' }
+    });
+    assert(r.status === 200);
+    assert(r.body.data.success === 2);
+  });
+
+  await test('candidates batch status 批量更新', async () => {
+    const c1 = await req('POST', '/api/v1/candidates', adminToken, { name: 'bs1', email: 'bs1_' + Date.now() + '@x.com' });
+    const r = await req('POST', '/api/v1/candidates/batch', adminToken, {
+      action: 'status',
+      ids: [c1.body.data.id],
+      params: { status: 'placed' }
+    });
+    assert(r.status === 200);
+    assert(r.body.data.success === 1);
+  });
+
+  await test('candidates batch 500 限制', async () => {
+    const ids = Array.from({ length: 501 }, (_, i) => i + 1);
+    const r = await req('POST', '/api/v1/candidates/batch', adminToken, {
+      action: 'tag', ids, params: { tag: 'x' }
+    });
+    assert(r.body.ok === false);
+    assert(r.body.error.message.includes('500'));
+  });
+
+  // === reports ===
+  await test('reports kpi', async () => {
+    const r = await req('GET', '/api/v1/reports/kpi', adminToken);
+    assert(r.status === 200);
+    assert(typeof r.body.data.totalCandidates === 'number');
+  });
+
+  await test('reports funnel 30 天', async () => {
+    const r = await req('GET', '/api/v1/reports/funnel?days=30', adminToken);
+    assert(r.status === 200);
+    assert(Array.isArray(r.body.data.stages));
+    assert(r.body.data.stages.length === 4);
+  });
+
+  await test('reports consultant-performance', async () => {
+    const r = await req('GET', '/api/v1/reports/consultant-performance?days=30', adminToken);
+    assert(r.status === 200);
+    assert(Array.isArray(r.body.data.consultants));
+  });
+
+  // === auth ===
+  await test('登录失败：错误密码返 401', async () => {
+    const r = await req('POST', '/api/v1/auth/login', null, { username: 'admin', password: 'wrong' });
+    assert(r.status === 401);
+    assert(r.body.ok === false);
+  });
+
+  await test('未带 token 调 API 返 401', async () => {
+    const r = await req('GET', '/api/v1/candidates', null);
+    assert(r.status === 401);
+  });
+
   // === 总结 ===
   console.log('\n============================================================');
   console.log(`结果: ${passedTests}/${totalTests} 通过`);
