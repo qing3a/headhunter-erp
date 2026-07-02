@@ -246,6 +246,17 @@ Internal use only.
 项目维护：[项目维护者]
 问题反馈：开 Issue 或联系维护者
 
+## PR 工作流
+
+本项目用 GitHub Flow：
+
+1. 从 `main` 拉新分支：`git checkout -b feature/xxx`
+2. 提交 + push：`git push -u origin feature/xxx`
+3. 开 PR：用 `.github/PULL_REQUEST_TEMPLATE.md` 模板
+4. CI 自动跑（vitest + E2E）：[![](https://github.com/qing3a/headhunter-erp/actions/workflows/test.yml/badge.svg)](https://github.com/qing3a/headhunter-erp/actions/workflows/test.yml)
+5. Review + merge 到 `main`
+6. 详见 `CONTRIBUTING.md`
+
 ## Development
 
 ### 依赖
