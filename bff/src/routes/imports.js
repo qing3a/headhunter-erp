@@ -90,12 +90,24 @@ router.post('/commit', importLimiter, upload.single('file'), handleUploadError, 
   } catch (e) {
     throw badRequest('字段映射 JSON 格式错误：' + e.message);
   }
-  if (!mapping || typeof mapping !== 'object') throw badRequest('字段映射不能为空');
+  // ===== v7.5 Bug 1 修复：mapping={} 必须抛 400 而非落到 service 抛 500 =====
+  if (!mapping || typeof mapping !== 'object' || Object.keys(mapping).length === 0) {
+    throw badRequest('字段映射不能为空');
+  }
 
   const skipDuplicates = req.body.skipDuplicates !== 'false'; // 默认 true
-  const result = await importService.commitImport(req.file.buffer, mapping, req.user.id, { skipDuplicates: skipDuplicates });
-  auditService.log(req.user.id, 'IMPORT_candidates', 'candidate', null, result, req.ip);
-  res.json(success(result));
+  try {
+    const result = await importService.commitImport(req.file.buffer, mapping, req.user.id, { skipDuplicates: skipDuplicates });
+    auditService.log(req.user.id, 'IMPORT_candidates', 'candidate', null, result, req.ip);
+    res.json(success(result));
+  } catch (e) {
+    // ===== v7.5 Bug 2 修复：非 Excel / JSZip 错误 → 400 而不是 500 =====
+    const msg = String(e.message || '');
+    if (/zip|file|excel|xlsx|invalid|format|corrupt|signature/i.test(msg)) {
+      throw badRequest('文件格式错误：必须是 .xlsx 或 .xls');
+    }
+    throw e;  // 其他错让全局 handler 处理
+  }
 }));
 
 module.exports = router;

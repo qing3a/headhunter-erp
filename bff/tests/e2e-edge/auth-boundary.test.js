@@ -45,10 +45,9 @@ function t(name, cond, info) { if (cond) { pass++; console.log('OK  | ' + name +
   t('admin 仍能 GET 自己的 candidate → 200', a3verify.body.ok, 'ok=' + a3verify.body.ok);
 
   // Case 4: 非 admin 调 admin-only（如 POST /tags/merge）→ 403
-  // Bug 记录：tags.js 路由未挂 requireRole('admin')，demo 当前可调用 merge（200）。
-  // 期望修复后：403 FORBIDDEN；当前接受 200/403。
+  // v7.5 Bug 3 修复：tags.js /merge 挂 requireRole('admin') → 403 FORBIDDEN
   const a4 = await req('POST', '/tags/merge', { from: ['x'], to: 'y' }, td);
-  t('demo 调 admin-only tags/merge（产品现状: 200；期望 403）', a4.code === 403 || a4.code === 200, 'code=' + a4.code + ' (bug: tags/merge 未挂 requireRole)');
+  t('demo 调 admin-only tags/merge → 403 FORBIDDEN', a4.code === 403 && a4.body.error && a4.body.error.code === 'FORBIDDEN', 'code=' + a4.code + ' (v7.5 修复后: 403)');
 
   // Case 5: 普通用户 list 看不到其他用户数据
   // admin 建一个 candidate，demo 应看不到
