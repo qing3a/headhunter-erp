@@ -8,7 +8,9 @@
     "dev": "node --watch src/index.js",
     "seed": "node src/db/init.js --seed",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "e2e": "node ../tests/e2e-runner.js",
+    "test:all": "npm test && npm run e2e"
   },
   "dependencies": {
     "axios": "^1.6.7",
