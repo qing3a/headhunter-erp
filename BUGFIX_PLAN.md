@@ -1147,6 +1147,89 @@ b9d39e7 (v0.1.0 tag) + release notes
 - **CI**：all green
 - **Release**：v0.1.0 + v0.2.0 + 自动 draft
 
+---
+
+## v7.5 阶段（2026-07-02 大改造收尾）
+
+> 来源：v7-E2E 暴露的 3 个产品 bug + 工程化改进
+> 范围：bug 修复 + 回归测试 + CI 增强 + 覆盖率
+
+| v7.5 ID | 说明 | 状态 | commit |
+|---|---|---|---|
+| **v7.5-bug-1** | `POST /imports/commit` 缺 mapping → 400 而非 500（`Object.keys(mapping).length === 0` 校验） | ✅ | 39088dd |
+| **v7.5-bug-2** | `POST /imports/commit` 非 Excel → 400 而非 500（commit handler try-catch + zip/excel regex） | ✅ | 39088dd |
+| **v7.5-bug-3** | `POST /tags/merge` 加 `requireRole('admin')` → demo 用户 403 | ✅ | 39088dd |
+| **v7.5-test** | 17 个回归 vitest（imports-validation 11 + tags-merge-auth 6） | ✅ | 39088dd |
+| **v7.5-e2e-fix** | 3 个 E2E edge case 预期改（缺 mapping / 非 Excel / tags merge 鉴权） | ✅ | 39088dd |
+| **v7.5-page** | 4 个 page 抽取补全（login / register / forgot-password / interview-detail）—— 实际 0 工作量：**4 个 page 都无 pageScript**，frontend-build.js 已直接 copy HTML | ✅ | — |
+| **v7.5-CI-build** | CI workflow 加 `node frontend-build.js` step（保证 CI 测 build 后的 page） | ✅ | 74ab4e0 |
+| **v7.5-coverage** | vitest coverage 报告（@vitest/coverage-v8） + .gitignore `coverage/` | ✅ | 74ab4e0 |
+| **v7.5-CI-artifact** | CI 上传 coverage HTML 到 artifact | ✅ | 74ab4e0 |
+
+**修 bug 总数**：64 + 3 = **67 个**
+
+**测试数演变**：
+
+| 阶段 | vitest | E2E | 总数 |
+|---|---|---|---|
+| v2 | 12 | 0 | 12 |
+| v3 | 50 | 0 | 50 |
+| v4 | 264 | 41 | 305 |
+| v5 | 270 | 40 | 310 |
+| v6 | 277 | 85 | 362 |
+| v6.5 | 305 | 85 | 390 |
+| v7 | 346 | 138 | 484 |
+| **v7.5** | **363** | **139** | **502** |
+
+**v7.5 关键 commit**：
+- `39088dd` fix 3 bugs + 17 vitest + 3 E2E 预期
+- `74ab4e0` CI build step + vitest coverage + .gitignore
+
+**性能（v7 + v7.5 累计）**：
+- 1000 candidates insert: **86ms**（v6 1000ms+ → **12x**）
+- FTS5 keyword query: **1ms**（v6 200ms → **200x**）
+- BFF 启动：**<1s**（v6 2-3s）
+- 测试运行：vitest 363 个 10s + E2E 139 个 60s
+
+**覆盖率**（v7.5 新增）：
+- 总 lines: 7.16%（低！原因：测试大多直接调 DB 而不走 supertest 路由）
+- middleware/permission.js: 100%
+- config/env.js: 93.33%
+- routes/recommendations.js: 25.65%
+- 其它 routes: 0%（需要 supertest 测覆盖）
+- thresholds 设为 5/15/2/5（不 hard-fail CI）
+
+**累计**（含 v0-v7.5）：
+- **修 bug**：67 个
+- **测试**：502 个（363 vitest + 139 e2e）
+- **commits**：49+
+- **CI**：all green
+- **Release**：v0.1.0 + v0.2.0 + release-drafter 自动 draft v0.3.0
+- **PR 工作流**：PR template + CONTRIBUTING + branch protection + release-drafter
+- **文档**：API.md + README.md + BUGFIX_PLAN.md + CONTRIBUTING.md + docs/fts5-upgrade.md
+
+**留待 v7.6+**：
+- routes/*.js 覆盖率从 0% 提升（写 supertest 路由测 + 替直接 DB 调用）
+- merge v7.5 PR + 发布 v0.3.0
+- i18n + 多语言（如果需要商业化）
+- Docker 化 + 部署指南（生产就绪度从 4/10 → 6/10）
+
+## v7.5 PR 状态
+- **PR #1** (v7 大改造)：OPEN @ `feature/v6.6-fts5-release-drafter`
+- **PR #2** (v7.5): 即将开（`feature/v7.5-bugs-ci-coverage`）
+- merge PR #1 → release-drafter 自动出 v0.3.0 draft
+- merge PR #2 → release-drafter 更新 v0.3.0 draft
+
+**关键发现**：
+- 3 个产品 bug 都在 import/merge 边界（用户上传 + 跨用户管理 tag），都是 v7-E2E 边界 case 暴露的
+- routes/* 覆盖率低是预期：当前测试偏 DB 单元而非 supertest 路由，需 v7.6 补
+
+## 下一步建议
+1. **merge PR #1 + #2**（先 #1 → release-drafter 出 v0.3.0 draft）
+2. **修 routes/* 覆盖率**（v7.6 写 supertest 路由测）
+3. **i18n + 多语言**（如果需要商业化）
+4. **Docker 化 + 部署指南**（生产就绪度从 4/10 → 6/10）
+
 **留待 v7.5+**：
 - 修 v7-E2E 暴露的 3 个产品 bug
 - better-sqlite3 持续优化（PRAGMA 调优 / batch insert）
