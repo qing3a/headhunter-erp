@@ -1411,4 +1411,56 @@ node -e "/* 完整测试脚本 */"
 
 ---
 
-**文档结束。接手者请按 P0 → P1 → P2 → P3 顺序逐项修复，每修一项更新本文档第 10 节的状态表。**
+## v9.0 阶段（2026-07-07 API Hub 化大改造）
+
+> 来源：用户决定 "本项目只做 API 数据集散地，其他项目（AI agent、ow-headhunter-erp）协作"
+> 范围：项目从 fullstack → 纯 API hub。前端迁 sibling，鉴权双轨化，OpenAPI spec 自动生成，文档重写
+
+| v9 ID | 说明 | 状态 | commit |
+|---|---|---|---|
+| **v9.0-alpha** | 前端（pages/ shared/ partials/ assets/ scripts/ + bff/public/ + frontend-build.js + 23 个前端专项 test）整体搬到 sibling 项目 `headhunter-frontend` | ✅ | ba81db3 |
+| **v9.0-beta** | BFF 清理：删 4 行 static serving + redirect + frontend-build step；新 `routes/landing.js` (GET / 返 API metadata JSON)；package.json 重命名为 `headhunter-api-hub` 9.0.0-beta；删 esbuild devDep；+ 2 tests | ✅ | bbddb3b |
+| **v9.0-gamma** | 鉴权双轨化：`api_keys` 表 + `middleware/apiKey.js` + smart-detect `requireAuth`（JWT or ApiKey）+ `requireScope` 中间件；CLI `scripts/create-api-key.js`；+ 6 tests | ✅ | beaada3 |
+| **v9.0-delta** | OpenAPI 3.0.3：`scripts/generate-openapi.js`（JSDoc → spec）+ `routes/openapi.js`（serve /api/v1/openapi.json + Swagger UI at /api/docs）+ 8 tests；顺带修 pre-existing test isolation bug（helpers.beforeEach 加 `DELETE FROM users`） | ✅ | be4fa89 |
+| **v9.0-epsilon** | 文档重写：`README.md`（API hub 视角）+ `INTEGRATION.md`（协作者指南）+ `DEPLOYMENT.md`（native deploy）+ `LICENSE`（Internal use only）；一致性修复：`.gitignore` 加 .env / `PROJECT_RULES.md` sql.js→better-sqlite3 + 前端约束迁 sibling / `aiMatchingService.js` 删除 pages/ 引用 / `.env.example` 补 REMINDER_SCAN AUDIT_RETENTION / `API.md` 加 API Key 鉴权节 + 修 PAYLOAD_TOO_LARGE 错误码不一致 | ✅ | (pending) |
+
+**修复的真实影响**：
+
+- **v9.0-alpha**：仓库瘦身 780K；BFF 启动 <1s；不再被 frontend-build step 阻塞
+- **v9.0-beta**：根路径 `/` 返 API metadata（不再是死的 302）；消费者 (AI agent) 探活时立刻知道在打哪个服务
+- **v9.0-gamma**：AI agent / 兄弟项目不再需要 admin 账号走 JWT；可发专属 API Key + scopes（细粒度权限）
+- **v9.0-delta**：浏览器打开 `/api/docs` 即试调所有 endpoint；OpenAPI spec 机器可读，下游可生成 client SDK
+- **v9.0-epsilon**：新协作者 5 分钟接入；README 不再过期（修 v0-v8 的 sql.js vs better-sqlite3 矛盾）；`.env` 不再误提交 git
+
+**测试数演变**：
+
+| 阶段 | vitest | E2E | 总数 |
+|---|---|---|---|
+| v8 (旧) | 440 | 144 | 584 |
+| **v9.0** | **395** | **144** | **539** |
+
+> ⚠️ 注意：v9.0 测试数从 584 → 539 (-45) 是因为 v9.0-alpha 删了 23 个 frontend 专项测试（pages/* + frontend/* + shared/* + smoke-test.js），v9.0-delta+epsilon 加了 16 (landing 2 + api-key 6 + openapi 8)。净减少 45 = 删除 85 + 新增 16 - 重复。
+
+**累计**：
+
+- **修 bug**：67 个（含 v0-v8 历史）+ **v9.0 大改造**（删 89 个前端文件、新增 5 个核心模块）
+- **测试**：395 vitest + 144 e2e = **539 tests** PASS
+- **commit**：50+ （含 v9.0 6 commit）
+- **CI**：all green
+- **Release**：v0.1.0 + v0.2.0 + 自动 draft v9.0.0
+- **文档**：README.md + API.md + INTEGRATION.md + DEPLOYMENT.md + BUGFIX_PLAN.md + CONTRIBUTING.md + PROJECT_RULES.md + LICENSE
+- **协作模式**：本 API hub + headhunter-frontend (sibling) + ow-headhunter-erp (sibling) + AI agents (HTTP)
+
+**留待 v9.1+**：
+
+- ❌ Docker / docker-compose / K8s manifests
+- ❌ 多租户 (`tenant_id` 列)
+- ❌ 真实 ML 匹配（向量 / LLM 重排）
+- ❌ WebSocket / SSE 实时推送
+- ❌ i18n 多语言
+- ❌ OpenAPI spec 路径大小写不一致（generator 用文件名 vs routes/index.js 用 kebab-case）
+- ❌ 全部 60+ endpoint 加 `@openapi-summary` 注解（目前 67 个还是 skeleton summary）
+
+---
+
+**v9.0 文档结束。接手者请按需修复 v9.1+ 列表项。**

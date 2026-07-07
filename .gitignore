@@ -1,8 +1,12 @@
 node_modules/
 bff/node_modules/
 bff/data/*.db*
+bff/coverage/
+bff/openapi.json.bak
 *.log
 .DS_Store
+.env
 .env.local
+bff/.env
 .vscode/
 .idea/

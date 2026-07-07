@@ -1,8 +1,10 @@
 # API 文档
 
-> headhunter-erp 完整 REST API 文档
+> **headhunter-api-hub** 完整 REST API 文档
 > Base URL：`http://localhost:3001/api/v1`
-> 认证：除 `/auth/login` 外，所有端点需要 `Authorization: Bearer <token>` 头
+> 认证：除 `/auth/login` 外，所有端点需要以下任一：
+> - `Authorization: Bearer <jwt>` （人类用户）
+> - `Authorization: ApiKey <key>` （服务消费者 — v9.0-gamma+）
 
 ## 通用响应格式
 
@@ -17,16 +19,59 @@
 ```
 
 错误码：
-- `NO_TOKEN` 401 未登录
-- `INVALID_TOKEN` 401 token 过期或无效
-- `UNAUTHORIZED` 401 认证失败
-- `FORBIDDEN` 403 无权访问
+- `NO_TOKEN` 401 未登录（缺 Authorization 头）
+- `INVALID_TOKEN` 401 token 过期 / 错误 / 已撤销
+- `UNAUTHORIZED` 401 用户被禁用
+- `FORBIDDEN` 403 权限不足（role 或 scope）
 - `NOT_FOUND` 404 资源不存在
 - `VALIDATION_ERROR` 400 参数校验失败
 - `DUPLICATE` / `CONFLICT` 409 数据冲突
 - `RATE_LIMITED` 429 限流
-- `PAYLOAD_TOO_LARGE` 413 文件过大
 - `INTERNAL_ERROR` 500 服务器错误
+
+---
+
+## 0. 鉴权（v9.0-gamma 起支持 2 种方式）
+
+### 0.1 JWT（人类用户）
+
+```bash
+# 登录拿 token
+curl -X POST $API_BASE/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+# → { "ok":true, "data":{ "token":"eyJ...", "user":{...} } }
+
+# 用 token
+curl -H "Authorization: Bearer eyJ..." $API_BASE/candidates
+```
+
+**TTL**：默认 7 天。改密会撤销所有旧 token。
+
+### 0.2 API Key（服务消费者）
+
+适合 AI agent / 兄弟项目 / CI 脚本。
+
+```bash
+# 一次性签发
+cd bff
+node scripts/create-api-key.js "my-ai-agent" --scopes "read:candidates,read:jobs"
+# → key (plain) : hha_Cls3OYsU3DXJK5DaZYLv05B8q08v-wm-c9nnvL4IL5s
+# ⚠️ 现在保存！ 之后无法再查
+
+# 用 key
+curl -H "Authorization: ApiKey hha_Cls3OYsU3DXJK5DaZYLv05B8q08v-wm-c9nnvL4IL5s" \
+  $API_BASE/candidates
+```
+
+**Scopes**（可选）：`read:candidates` / `write:candidates` / `read:jobs` / `*`（通配）。空 scopes = 通配。
+
+**撤销**（SQL）：
+```sql
+UPDATE api_keys SET revoked_at = datetime('now') WHERE client_name = 'my-ai-agent';
+```
+
+详细协作流程见 [INTEGRATION.md](./INTEGRATION.md)。
 
 ---
 
