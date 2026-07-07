@@ -12,11 +12,13 @@ router.use(requireAuth);
 // ============================================================
 // 候选人主表
 // ============================================================
+// 候选人主表
+// ============================================================
 
 /**
- * GET /api/v1/candidates
- * 列表（分页+搜索+筛选+JOIN tags）
- * Query: page, pageSize, keyword, status, city, source_channel, years_min, years_max, includeDeleted
+ * @openapi-tags Candidates
+ * @openapi-summary 候选人列表 (分页+筛选+FTS5 搜索)
+ * @openapi-description 支持 keyword 全文搜索 (FTS5), status/city/source_channel/years/education/salary 多维筛选, includeDeleted (admin only) 查软删
  */
 router.get('/', asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);

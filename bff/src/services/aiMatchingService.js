@@ -1,6 +1,7 @@
 // bff/src/services/aiMatchingService.js
 // AI 匹配：6 维度加权算法
-// 沿用 pages/ai-matching.html 的 client-side 逻辑搬到后端
+// 历史: 算法源自 v8 之前 pages/ai-matching.html 的 client-side 逻辑，v8-B 迁到后端
+// v9.0-alpha: 前端迁到 sibling 项目后, 此处不再引用 pages/
 const { getDb } = require('../db/init');
 
 const EDUCATION_RANK = { highschool: 1, bachelor: 2, master: 3, phd: 4 };

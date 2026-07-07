@@ -28,11 +28,12 @@ jobs:
           path: bff/node_modules/better-sqlite3/build
           key: ${{ runner.os }}-better-sqlite3-${{ hashFiles('bff/package-lock.json') }}
 
-      - name: Install BFF deps + frontend-build (v7.5)
+      - name: Install BFF deps
         working-directory: bff
         run: |
           npm ci
-          node frontend-build.js   # ===== v7.5 新增：保证 CI 测 build 后的 page =====
+          # ===== v9.0-beta: frontend-build.js 已迁到 sibling project headhunter-frontend =====
+          # 本 CI 不再构建前端 (避免无谓 work + 防本地需要 frontend 时挂在 v9 之前仓库)
 
       - name: Run vitest
         working-directory: bff

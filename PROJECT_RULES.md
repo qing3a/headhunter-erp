@@ -12,15 +12,18 @@
 ## 架构概览
 
 ```
-浏览器
-  └─→ http://localhost:3001 (BFF = Express)
-        ├─ /pages/*      → express.static(项目 pages/)
-        ├─ /shared/*     → express.static(项目 shared/)
-        ├─ /partials/*   → express.static(项目 partials/)
-        └─ /api/v1/*     → requireAuth → 业务路由
-                              ├─→ sql.js (内存 SQLite, ./data/erp.db)
-                              └─→ PLATFORM_API (localhost:3000, 仅 jobs 模块)
+浏览器 / AI agent / 兄弟项目
+  └─→ http://<host>:3001 (BFF = Express, 纯 API 服务)
+        ├─ GET /                 → landing JSON (API metadata)
+        ├─ GET /api/docs         → Swagger UI
+        ├─ GET /api/v1/openapi.json → OpenAPI 3.0.3 spec
+        └─ /api/v1/*             → requireAuth (JWT or API Key smart-detect)
+                                      ├─→ better-sqlite3 (./data/erp.db, WAL)
+                                      └─→ PLATFORM_API (localhost:3000, 可选)
 ```
+
+> v9.0-alpha 起，前端 (`pages/`/`shared/`/`partials/`) 迁到 sibling project **headhunter-frontend**。
+> 本仓是**纯 API hub**，人类用浏览器需跑 sibling 项目；服务消费者直接调 HTTP。
 
 ---
 
@@ -28,37 +31,38 @@
 
 | 服务 | 端口 | 启动命令 | 说明 |
 |------|------|----------|------|
-| BFF + 静态前端 | **3001** | `cd bff && npm start` | 同源部署，BFF 自己托管 `/pages`、`/shared`、`/partials` |
+| BFF (本项目) | **3001** | `cd bff && npm start` | 纯 API 服务 |
+| headhunter-frontend (sibling) | 8080（默认）| `cd ../headhunter-frontend && npm start` | 浏览器 UI，**可选** |
 | 平台 API | 3000 | （外部服务）| BFF 通过 `PLATFORM_API_BASE` 调用，本项目**不启动** |
 
-- 根路径 `/` → 302 跳 `/pages/dashboard.html`
-- 不要起 5500 / 8080 等额外静态服务器（会跨域）
-- 前端 API 路径用**相对路径** `/api/v1`，**禁止**写 `http://localhost:3001`
+- 根路径 `/` → JSON landing（v9.0-beta 改动，之前是 302 跳前端）
+- CORS：`.env` 配 `CORS_ORIGINS`，逗号分隔
+- 客户端 API 路径用**完整 base URL**（不像 v9.0 之前用相对路径）
+- swagger-ui 在 `/api/docs`
 
 ---
 
 ## 2. 目录结构（只列常用）
 
 ```
-headhunter-erp/
+headhunter-api-hub/
 ├── bff/                          # 后端 BFF
 │   ├── src/
 │   │   ├── index.js              # Express 入口（中间件顺序固定）
 │   │   ├── config/env.js         # 环境配置
-│   │   ├── db/init.js            # sql.js + 自动建表 + seed
-│   │   ├── middleware/           # auth / permission / errorHandler
-│   │   ├── routes/               # auth / dashboard / candidates / jobs / interviews / tasks / clients
-│   │   ├── services/             # authService / auditService / platformApi
+│   │   ├── db/init.js            # better-sqlite3 + 自动建表 + seed
+│   │   ├── middleware/           # auth (JWT+API Key) / permission (role+scope) / errorHandler
+│   │   ├── routes/               # 13 route groups (含 openapi + landing)
+│   │   ├── services/             # authService / auditService / platformApi / aiMatchingService / importService
 │   │   └── utils/                # response / errors / asyncHandler
-│   ├── data/erp.db               # SQLite 文件（建议加进 .gitignore）
+│   ├── scripts/
+│   │   ├── check-fts5.js         # FTS5 可用性检测
+│   │   ├── create-api-key.js     # 签发 API Key CLI
+│   │   └── generate-openapi.js   # JSDoc → OpenAPI 3.0.3
+│   ├── tests/                    # 395 vitest + supertest tests
+│   ├── data/erp.db               # SQLite 文件（gitignored）
+│   ├── openapi.json              # OpenAPI 3.0.3 spec (generated)
 │   └── .env                      # ⚠️ 不要提交 git
-├── pages/                        # 前端页面（HTML）
-├── partials/project-shell.html   # 布局壳（侧边栏 + 顶栏）
-├── shared/                       # 前端共享 JS/CSS
-│   ├── auth.js / loading.js / router.js / api.js
-│   ├── layout.js                 # 加载 partial + 路由守卫 + 用户信息填充
-│   ├── shared.css                # 主题变量 + 组件样式
-│   └── storage.js / shared.js
 └── PROJECT_RULES.md              # 本文件
 ```
 
@@ -71,7 +75,8 @@ headhunter-erp/
 固定顺序，**禁止改动**：
 
 ```
-express.static(/shared, /partials, /pages)
+landing (/)
+  → openapi (Swagger UI + openapi.json)
   → helmet
   → cors
   → express.json / urlencoded
@@ -84,11 +89,12 @@ express.static(/shared, /partials, /pages)
 
 ### 3.2 数据库
 
-- 使用 `sql.js`（内存版 SQLite），**禁止**引入 better-sqlite3 / node:sqlite
-- 表结构由 `db/init.js` 自动建，启动时 ALTER 兼容老库
+- **better-sqlite3**（同步 N-API SQLite，WAL + FK）
+- 表结构由 `db/init.js` 自动建，启动时 `CREATE IF NOT EXISTS` / `safeExec ALTER` 兼容老库
 - 所有业务表必须有以下字段：`user_id INTEGER`、`deleted_at TEXT`、`created_at TEXT`、`updated_at TEXT`
 - 软删除：`UPDATE table SET deleted_at = datetime('now') WHERE ...`
 - 查询默认过滤 `deleted_at IS NULL`，admin 可加 `?includeDeleted=true`
+- v9.0+: 新增 `api_keys` 表（v9.0-gamma，服务间鉴权）
 
 ### 3.3 路由写法（强制）
 
@@ -139,89 +145,19 @@ express.static(/shared, /partials, /pages)
 
 ## 4. 前端约束
 
-### 4.1 页面通用结构
+> **v9.0-alpha 起，前端迁到 sibling 项目 [`headhunter-frontend`](https://github.com/qing3a/headhunter-frontend)**。
+> 本仓不再有 `pages/`、`shared/`、`partials/`、`assets/`。前端约束详见 sibling 仓库的 `PROJECT_RULES.md`。
 
-每个页面 `<head>` 必须包含：
+如需修改前端规则：
 
-```html
-<link rel="stylesheet" href="../shared/shared.css">
-<script src="../shared/auth.js"></script>
-<script src="../shared/loading.js"></script>
-<script src="../shared/router.js"></script>
-<script src="../shared/api.js"></script>
-<script src="../shared/shared.js"></script>
-<script src="../shared/layout.js"></script>
-```
-
-`auth.js → loading.js → router.js → api.js → shared.js → layout.js` **顺序固定**，不能调换。
-
-页面 body 顶层 `<div id="pageContent">`，CSS 用 `<style id="pageStyle">`，脚本用 `<script id="pageScript">`（layout.js 会搬运到正确位置）。
-
-### 4.2 共享工具（window.*）
-
-| 工具 | 用途 | 关键 API |
-|------|------|----------|
-| `Auth` | 登录态 | `getToken/getUser/setSession/clear/logout/requireLogin/isAdmin/hasRole` |
-| `Router` | 路由跳转 | `go(name) / navigate(path) / getParam(name) / current()` |
-| `Loading` | 全屏 loading | `show() / hide() / forceHide()`（带引用计数） |
-| `API` | 后端调用 | `API.tasks/jobs/interviews/candidates/clients/dashboard/auth` |
-
-### 4.3 API 调用规则
-
-- **始终**通过 `window.API.xxx.yyy()` 调用，**禁止**直接 `fetch`
-- 列表接口返回 `{ok:true, data:[], meta:{total,page,pageSize,hasMore}}`
-- `API.tasks.list()` 等命名空间方法通过**闭包变量 `api`** 访问 `_request` / `_unwrap`，**不要用 `this`**（历史踩坑：prototype 嵌套对象字面量里 `this` 指向子对象而不是 ApiClient 实例，会找不到 `_request`）
-- 401 时 `API._request` 自动调 `Auth.logout()` 跳 login，**不要在调用方重复处理**
-- 错误提示用 `UI.showToast` 或 `Toast.error`，**不要**直接 `alert`
-
-### 4.4 DOM 钩子（partial/layout.js 约定）
-
-修改 `partials/project-shell.html` 时，同步改 `shared/layout.js` 的 `fillUserInfo()`。
-
-当前钩子清单：
-
-| `data-dom-id` | 用途 | 填充字段 |
-|---|---|---|
-| `sidebar-user-name` | sidebar 底部用户名 | `displayName \|\| username` |
-| `sidebar-user-role` | sidebar 底部角色 | 中文角色标签 |
-| `dropdown-user-name` | 右上角 dropdown 名字 | 同上 |
-| `dropdown-user-role` | 右上角 dropdown 角色 | `角色 · username` |
-| `logout-btn` | 登出按钮 | 点击 → `Auth.logout()` |
-
-**新增钩子必须三处同步**：partial HTML + layout.js 选择器 + data-dom-id 约定。
-
-### 4.5 element 绑定写法
-
-DOMContentLoaded 里绑事件**必须用 null-safe 模式**：
-
-```js
-function on(id, evt, handler) {
-  const el = document.getElementById(id);
-  if (el) el.addEventListener(evt, handler);
-}
-
-on('saveBtn', 'click', saveHandler);
-```
-
-**禁止**：
-
-```js
-document.getElementById('saveBtn').addEventListener('click', saveHandler);
-// TypeError: Cannot read properties of null
-```
+- 改 sibling 项目的 PROJECT_RULES.md
+- 或 PR 到 sibling 项目加新约束
 
 ---
 
 ## 5. 设计规范
 
-### 5.1 配色（CSS 变量）
-
-主色：`#0D9488` (--color-primary)
-辅助：`#14B8A6` (light) / `#5EEAD4` (lighter) / `#CCFBF1` (lightest) / `#0F766E` (dark)
-
-### 5.2 字体
-
-**禁止**使用 Google Fonts / 任何外部字体 CDN。统一：
+> 同 §4，前端样式迁到 sibling 项目。API hub 不再涉及 UI 设计。
 
 ```css
 --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;

@@ -113,6 +113,26 @@ function createTables() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    -- ===== v9.0-gamma 新增：API Key 表（服务间鉴权）=====
+    -- 协作者 (AI agent / ow-headhunter-erp / 自建 client) 用 API key 代替 JWT
+    -- scoped: e.g. "read:candidates" / "write:candidates" / "read:jobs"
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_name TEXT NOT NULL,
+      key_prefix TEXT NOT NULL,
+      hashed_key TEXT NOT NULL UNIQUE,
+      scopes TEXT DEFAULT '[]',
+      user_id INTEGER,
+      last_used_at TEXT,
+      revoked_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_keys_client ON api_keys(client_name);
+    CREATE INDEX IF NOT EXISTS idx_api_keys_revoked ON api_keys(revoked_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS uniq_api_keys_hashed ON api_keys(hashed_key);
+    -- ===== v9.0-gamma 结束 =====
+
     CREATE TABLE IF NOT EXISTS interviews (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       candidate_name TEXT NOT NULL,

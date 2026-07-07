@@ -24,15 +24,15 @@ const app = express();
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 
-// ===== P0-NEW-1 修复：trust proxy 限制为 loopback，避免伪造 X-Forwarded-For =====
+// ===== v9.0-beta: projectRoot 现在仅用于 bff/src/index.js 内部路径解析 =====
+// 之前用于静态服务 /shared /partials /pages。 现前端已迁走，static serving 删除。
+// ===== 修复结束 =====
 app.set('trust proxy', 'loopback');
 // ===== 修复结束 =====
 
-app.use('/shared', express.static(path.join(projectRoot, 'shared'), { maxAge: '1h' }));
-app.use('/partials', express.static(path.join(projectRoot, 'partials'), { maxAge: '1h' }));
-// Phase 3: esbuild 输出优先（bff/public/pages），原 pages 目录作为 fallback
-app.use('/pages', express.static(path.join(__dirname, '..', 'public', 'pages'), { maxAge: '1h', extensions: ['html'] }));
-app.use('/pages', express.static(path.join(projectRoot, 'pages'), { maxAge: 0, extensions: ['html'] }));
+// ===== v9.0-beta: 不再 serve frontend (pages/shared/partials) =====
+// 前端迁到 sibling project headhunter-frontend. 本仓变成纯 API hub.
+// ===== 修复结束 =====
 
 app.use(helmet({
   contentSecurityPolicy: false,
@@ -69,9 +69,8 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
-app.get('/', (req, res) => {
-  res.redirect('/pages/dashboard.html');
-});
+app.use('/', require('./routes/landing'));
+app.use(require('./routes/openapi')); // mounts /api/v1/openapi.json + /api/docs + /openapi
 
 app.use('/api/v1', routes);
 

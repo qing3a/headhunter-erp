@@ -1,7 +1,7 @@
 {
-  "name": "headhunter-erp-bff",
-  "version": "0.1.0",
-  "description": "TalentFlow AI ERP BFF Layer",
+  "name": "headhunter-api-hub",
+  "version": "9.0.0",
+  "description": "Headhunter API Hub — pure API server (no frontend). Designed for collaboration with AI agents and sibling projects (e.g. ow-headhunter-erp).",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
@@ -11,7 +11,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "e2e": "node ../tests/e2e-runner.js",
-    "test:all": "npm test && npm run e2e"
+    "test:all": "npm test && npm run e2e",
+    "openapi:generate": "node scripts/generate-openapi.js",
+    "openapi:check": "node scripts/generate-openapi.js --check --strict"
   },
   "dependencies": {
     "axios": "^1.6.7",
@@ -29,7 +31,6 @@
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.9",
-    "esbuild": "^0.28.1",
     "happy-dom": "^20.10.6",
     "supertest": "^7.2.2",
     "vitest": "^4.1.9"

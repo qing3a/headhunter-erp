@@ -66,7 +66,8 @@ export async function setupTests() {
       DELETE FROM interviews;
       DELETE FROM tasks;
       DELETE FROM jobs;
-      DELETE FROM users WHERE id IN (1, 2);
+      DELETE FROM api_keys;
+      DELETE FROM users;
     `);
     seedAdmin(db);
     seedConsultant(db);
