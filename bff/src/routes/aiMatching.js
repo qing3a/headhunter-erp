@@ -1,7 +1,8 @@
 // bff/src/routes/aiMatching.js
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
-const { success, badRequest, notFound } = require('../utils/errors');
+const { badRequest, notFound } = require('../utils/errors');
+const { success } = require('../utils/response');
 const { getDb } = require('../db/init');
 const asyncHandler = require('../utils/asyncHandler');
 const aiService = require('../services/aiMatchingService');
