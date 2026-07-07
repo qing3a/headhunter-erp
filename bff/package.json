@@ -1,6 +1,6 @@
 {
   "name": "headhunter-api-hub",
-  "version": "9.0.0-beta",
+  "version": "9.0.0",
   "description": "Headhunter API Hub — pure API server (no frontend). Designed for collaboration with AI agents and sibling projects (e.g. ow-headhunter-erp).",
   "main": "src/index.js",
   "scripts": {
