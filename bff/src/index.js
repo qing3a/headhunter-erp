@@ -70,6 +70,7 @@ const apiLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 
 app.use('/', require('./routes/landing'));
+app.use(require('./routes/openapi')); // mounts /api/v1/openapi.json + /api/docs + /openapi
 
 app.use('/api/v1', routes);
 

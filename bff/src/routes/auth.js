@@ -26,6 +26,12 @@ function getIp(req) {
   return (req.ip || req.connection?.remoteAddress || '').toString();
 }
 
+/**
+ * @openapi-tags Auth
+ * @openapi-summary 用户名+密码登录, 拿 JWT
+ * @openapi-description 10 次 / 15 分钟 限流 (per IP). 返回 token + user. token 后续放 Authorization: Bearer <token>
+ * @openapi-noauth
+ */
 router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {

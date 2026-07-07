@@ -11,7 +11,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "e2e": "node ../tests/e2e-runner.js",
-    "test:all": "npm test && npm run e2e"
+    "test:all": "npm test && npm run e2e",
+    "openapi:generate": "node scripts/generate-openapi.js",
+    "openapi:check": "node scripts/generate-openapi.js --check --strict"
   },
   "dependencies": {
     "axios": "^1.6.7",
